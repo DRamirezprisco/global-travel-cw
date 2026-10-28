@@ -1,0 +1,720 @@
+---
+import { GRID_COLUMNS } from '@/constants/site';
+import { CLIENTE_STATUS_LIST, STATUS_CONFIGS } from '@/constants/statuses';
+import type { ClienteRecord, ClienteStatus } from '@/types';
+
+interface Props {
+  clientes: ClienteRecord[];
+}
+
+const { clientes } = Astro.props;
+
+const statusCounts = CLIENTE_STATUS_LIST.reduce(
+  (acc, status) => {
+    acc[status] = clientes.filter((c) => c.status === status).length;
+    return acc;
+  },
+  {} as Record<ClienteStatus, number>
+);
+---
+
+<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <!-- Tarjetas / Píldoras de los 10 Estatus con Colores de la Página 1 -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-primary">
+        Filtrar por Estatus Operativo (10 Estatus Unificados)
+      </h2>
+      <button
+        type="button"
+        id="btn-reset-status"
+        class="text-xs font-semibold text-secondary hover:underline cursor-pointer"
+      >
+        Ver todos los registros (<span id="reset-total-count">{clientes.length}</span>)
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      {
+        CLIENTE_STATUS_LIST.map((statusKey) => {
+          const cfg = STATUS_CONFIGS[statusKey];
+          const count = statusCounts[statusKey] ?? 0;
+          return (
+            <button
+              type="button"
+              data-status-pill={statusKey}
+              title={cfg.shortDescription}
+              class={`status-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition hover:shadow-sm cursor-pointer ${cfg.badgeClass}`}
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`} />
+                <span class="text-xs font-bold truncate">{cfg.label}</span>
+              </div>
+              <span
+                data-status-count={statusKey}
+                class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2 py-0.5 text-xs font-extrabold shrink-0"
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })
+      }
+    </div>
+  </div>
+
+  <!-- Barra de búsqueda y controles del Grid -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <div class="relative flex-1 max-w-md">
+        <input
+          type="search"
+          id="input-search-clientes"
+          placeholder="Buscar por cliente, teléfono, código PNR, vuelo, observación o precio..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="select-filter-status" class="text-xs font-bold text-primary whitespace-nowrap">
+          Estatus:
+        </label>
+        <select
+          id="select-filter-status"
+          class="rounded-lg border border-base-border bg-base-muted px-3 py-2 text-sm font-medium text-primary focus:border-primary focus:bg-base focus:outline-none"
+        >
+          <option value="ALL">Todos los estatus ({clientes.length})</option>
+          {
+            CLIENTE_STATUS_LIST.map((statusKey) => (
+              <option value={statusKey}>
+                {STATUS_CONFIGS[statusKey].label}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between md:justify-end gap-3 text-xs font-semibold text-primary">
+      <span class="text-primary/70 hidden sm:inline">
+        Haz clic en cualquier fila para ver y editar el expediente completo
+      </span>
+      <span id="visible-rows-counter">
+        Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
+      </span>
+      <span
+        id="d1-sync-toast"
+        class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-2.5 py-1 text-xs font-bold"
+      >
+        Guardado en D1
+      </span>
+    </div>
+  </div>
+
+  <!-- Tabla Grid Maestra Unificada (6 Columnas Fijas, Clic en Fila abre Ventana Completa) -->
+  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+    <div
+      tabindex="0"
+      role="region"
+      aria-labelledby="clientes-table-caption"
+      class="table-wrapper"
+    >
+      <table class="clientes-table text-left text-sm">
+        <caption id="clientes-table-caption" class="sr-only">
+          Tabla unificada de clientes de Global Travel CW almacenada en Cloudflare D1
+        </caption>
+        <thead class="bg-primary text-base text-xs uppercase tracking-wider">
+          <tr>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[230px]">
+              {GRID_COLUMNS.contacto}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[210px]">
+              {GRID_COLUMNS.status}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[125px]">
+              {GRID_COLUMNS.fecha_gestion}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[240px]">
+              {GRID_COLUMNS.solicitud_vuelo}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[280px]">
+              {GRID_COLUMNS.observacion}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[120px]">
+              {GRID_COLUMNS.monto}
+            </th>
+          </tr>
+        </thead>
+        <tbody id="clientes-tbody" class="divide-y divide-base-border">
+          {
+            clientes.map((cliente) => {
+              const cfg = STATUS_CONFIGS[cliente.status] ?? STATUS_CONFIGS['Pendiente Cotizacion'];
+              return (
+                <tr
+                  tabindex="0"
+                  role="button"
+                  aria-label={`Abrir detalle completo de ${cliente.contacto}`}
+                  data-row-id={cliente.id}
+                  data-row-status={cliente.status}
+                  data-row-record={JSON.stringify(cliente)}
+                  class="hover:bg-base-muted focus:bg-base-muted focus:outline-none transition-colors cursor-pointer"
+                >
+                  <th
+                    scope="row"
+                    data-cell-contacto={cliente.id}
+                    class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
+                  >
+                    <span class="text-sm leading-snug">{cliente.contacto}</span>
+                  </th>
+
+                  <td class="py-3.5 px-4 align-middle">
+                    <span
+                      data-badge-for={cliente.id}
+                      class={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`}
+                    >
+                      <span
+                        data-dot-for={cliente.id}
+                        class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`}
+                      />
+                      <span data-label-for={cliente.id}>{cliente.status}</span>
+                    </span>
+                  </td>
+
+                  <td
+                    data-cell-fecha={cliente.id}
+                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary whitespace-nowrap"
+                  >
+                    {cliente.fecha_gestion}
+                  </td>
+
+                  <td
+                    data-cell-vuelo={cliente.id}
+                    class="py-3.5 px-4 align-middle text-xs font-semibold text-primary"
+                  >
+                    {cliente.solicitud_vuelo}
+                  </td>
+
+                  <td
+                    data-cell-observacion={cliente.id}
+                    class="py-3.5 px-4 align-middle text-xs text-primary/90 leading-relaxed"
+                  >
+                    {cliente.observacion}
+                  </td>
+
+                  <td
+                    data-cell-precio={cliente.id}
+                    class="py-3.5 px-4 align-middle text-xs font-extrabold"
+                  >
+                    {cliente.monto !== '-' ? (
+                      <span class="text-secondary">{cliente.monto}</span>
+                    ) : (
+                      <span class="text-primary/40 font-normal">-</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Ventana Modal Completa (<dialog>) para Ver, Editar, Guardar Cambios o Eliminar en Cloudflare D1 -->
+<dialog
+  id="modal-cliente"
+  aria-labelledby="modal-title"
+  {...({ closedby: 'any' } as any)}
+  class="m-auto w-full max-w-2xl rounded-2xl border-2 border-primary bg-base p-0 text-primary shadow-2xl backdrop:bg-primary-dark/60"
+>
+  <form id="form-cliente" class="flex flex-col">
+    <!-- Cabecera del Modal -->
+    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base border-b-4 border-secondary">
+      <div>
+        <h3 id="modal-title" class="text-base sm:text-lg font-extrabold">
+          Detalle Completo del Cliente
+        </h3>
+        <p id="modal-subtitle" class="text-xs text-base-muted opacity-85 mt-0.5">
+          Todos los campos son editables y se guardan en Cloudflare D1
+        </p>
+      </div>
+      <button
+        type="button"
+        id="btn-close-modal"
+        class="rounded-lg bg-primary-dark px-3 py-1.5 text-xs font-bold text-base hover:bg-secondary transition cursor-pointer"
+      >
+        Cerrar ✕
+      </button>
+    </div>
+
+    <!-- Cuerpo del Formulario con TODA la información (incluyendo columnas ocultas de la tabla principal) -->
+    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+      <input type="hidden" id="field-id" name="id" value="" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label for="field-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
+            Cliente (Nombre / Teléfono) *
+          </label>
+          <input
+            type="text"
+            id="field-contacto"
+            name="contacto"
+            required
+            placeholder="Ej. Jaime Goenaga Pax | +599 9 600 0000"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="field-status" class="block text-xs font-bold uppercase text-primary mb-1">
+            Estatus *
+          </label>
+          <select
+            id="field-status"
+            name="status"
+            required
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            {
+              CLIENTE_STATUS_LIST.map((st) => (
+                <option value={st}>{STATUS_CONFIGS[st].label}</option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="field-fecha" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha (Gestión / Reserva / Factura)
+          </label>
+          <input
+            type="text"
+            id="field-fecha"
+            name="fecha_gestion"
+            placeholder="Ej. 23/10/26"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label for="field-solicitud" class="block text-xs font-bold uppercase text-primary mb-1">
+            Datos del Vuelo (Solicitud / Ruta / Fechas de Vuelo)
+          </label>
+          <input
+            type="text"
+            id="field-solicitud"
+            name="solicitud_vuelo"
+            placeholder="Ej. CUR-BOG 21 OCT | BOG-BAQ 25 OCT | BAQ-CUR 01 NOV"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-medium focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="field-codigo" class="block text-xs font-bold uppercase text-primary mb-1">
+            Código / Localizador PNR / Nº Factura
+          </label>
+          <input
+            type="text"
+            id="field-codigo"
+            name="codigo"
+            placeholder="Ej. Avior | *ZYITWU o GVT-008"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-mono text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="field-checkin" class="block text-xs font-bold uppercase text-primary mb-1">
+            Estado de Check-in
+          </label>
+          <input
+            type="text"
+            id="field-checkin"
+            name="checkin"
+            placeholder="Ej. Pendiente / Completado / -"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="field-monto" class="block text-xs font-bold uppercase text-primary mb-1">
+            Precio (Monto / Deuda)
+          </label>
+          <input
+            type="text"
+            id="field-monto"
+            name="monto"
+            placeholder="Ej. 819 Fls o 355$"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="field-origen" class="block text-xs font-bold uppercase text-primary mb-1">
+            Lista de Origen (Reporte Semanal)
+          </label>
+          <input
+            type="text"
+            id="field-origen"
+            name="origen_tabla"
+            placeholder="Ej. Cotizaciones, Reserva 24 hrs..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label for="field-observacion" class="block text-xs font-bold uppercase text-primary mb-1">
+            Observación (Respuesta / Seguimiento / Acuerdo de Pago)
+          </label>
+          <textarea
+            id="field-observacion"
+            name="observacion"
+            rows="3"
+            placeholder="Detalles de seguimiento, acuerdos de pago o respuesta al cliente..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie del Modal con Botones para Eliminar y Guardar Cambios -->
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+      <div>
+        <button
+          type="button"
+          id="btn-delete-modal"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 border border-secondary px-4 py-2 text-xs font-extrabold text-secondary hover:bg-secondary hover:text-base transition cursor-pointer"
+        >
+          Eliminar Cliente
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2.5 ml-auto">
+        <button
+          type="button"
+          id="btn-cancel-modal"
+          class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-bold text-primary hover:bg-base-muted cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          id="btn-submit-modal"
+          class="rounded-lg bg-primary hover:bg-primary-light px-5 py-2 text-xs font-extrabold text-base shadow-xs transition cursor-pointer"
+        >
+          Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  import { STATUS_CONFIGS } from '@/constants/statuses';
+  import type { ClienteRecord, ClienteStatus } from '@/types';
+
+  const searchInput = document.querySelector<HTMLInputElement>('#input-search-clientes');
+  const statusSelect = document.querySelector<HTMLSelectElement>('#select-filter-status');
+  const resetBtn = document.querySelector<HTMLButtonElement>('#btn-reset-status');
+  const tbody = document.querySelector<HTMLTableSectionElement>('#clientes-tbody');
+  const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
+  const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
+
+  const modal = document.querySelector<HTMLDialogElement>('#modal-cliente');
+  const form = document.querySelector<HTMLFormElement>('#form-cliente');
+  const modalTitle = document.querySelector<HTMLElement>('#modal-title');
+  const modalSubtitle = document.querySelector<HTMLElement>('#modal-subtitle');
+  const btnOpenNew = document.querySelector<HTMLButtonElement>('#btn-open-new-modal');
+  const btnCloseModal = document.querySelector<HTMLButtonElement>('#btn-close-modal');
+  const btnCancelModal = document.querySelector<HTMLButtonElement>('#btn-cancel-modal');
+  const btnDeleteModal = document.querySelector<HTMLButtonElement>('#btn-delete-modal');
+  const btnSubmitModal = document.querySelector<HTMLButtonElement>('#btn-submit-modal');
+
+  const fId = document.querySelector<HTMLInputElement>('#field-id');
+  const fContacto = document.querySelector<HTMLInputElement>('#field-contacto');
+  const fStatus = document.querySelector<HTMLSelectElement>('#field-status');
+  const fCodigo = document.querySelector<HTMLInputElement>('#field-codigo');
+  const fFecha = document.querySelector<HTMLInputElement>('#field-fecha');
+  const fSolicitud = document.querySelector<HTMLInputElement>('#field-solicitud');
+  const fMonto = document.querySelector<HTMLInputElement>('#field-monto');
+  const fCheckin = document.querySelector<HTMLInputElement>('#field-checkin');
+  const fOrigen = document.querySelector<HTMLInputElement>('#field-origen');
+  const fObservacion = document.querySelector<HTMLTextAreaElement>('#field-observacion');
+
+  function showSyncToast(text = 'Guardado en Cloudflare D1') {
+    if (!syncToast) return;
+    syncToast.textContent = text;
+    syncToast.classList.remove('hidden');
+    window.setTimeout(() => {
+      syncToast.classList.add('hidden');
+    }, 2600);
+  }
+
+  function applyFilters() {
+    if (!tbody) return;
+    const query = (searchInput?.value ?? '').toLowerCase().trim();
+    const selectedStatus = statusSelect?.value ?? 'ALL';
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+
+    let visibleCount = 0;
+    for (const row of rows) {
+      const rowStatus = row.dataset.rowStatus ?? '';
+      const rowRecordStr = (row.dataset.rowRecord ?? '').toLowerCase();
+      const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
+      const matchesQuery = !query || rowRecordStr.includes(query);
+
+      if (matchesStatus && matchesQuery) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    if (visibleCounter) {
+      visibleCounter.innerHTML = `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
+      if (selectedStatus !== 'ALL' && pill.dataset.statusPill === selectedStatus) {
+        pill.classList.add('ring-2', 'ring-primary', 'scale-[1.02]');
+      } else {
+        pill.classList.remove('ring-2', 'ring-primary', 'scale-[1.02]');
+      }
+    });
+  }
+
+  function recalculateStatusCounts() {
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const counts: Record<string, number> = {};
+
+    for (const row of rows) {
+      const st = row.dataset.rowStatus ?? '';
+      counts[st] = (counts[st] || 0) + 1;
+    }
+
+    document.querySelectorAll<HTMLElement>('[data-status-count]').forEach((badge) => {
+      const st = badge.dataset.statusCount ?? '';
+      badge.textContent = String(counts[st] || 0);
+    });
+
+    const headerTotal = document.getElementById('header-total-count');
+    if (headerTotal) headerTotal.textContent = String(rows.length);
+
+    const resetTotal = document.getElementById('reset-total-count');
+    if (resetTotal) resetTotal.textContent = String(rows.length);
+  }
+
+  function openClientModal(record: ClienteRecord) {
+    if (!modal || !form) return;
+
+    if (modalTitle) {
+      modalTitle.textContent = `Expediente de Cliente #${record.id}`;
+    }
+    if (modalSubtitle) {
+      modalSubtitle.textContent = `Origen: ${record.origen_tabla} · Última act. D1: ${record.updated_at || 'Reciente'}`;
+    }
+
+    if (fId) fId.value = String(record.id);
+    if (fContacto) fContacto.value = record.contacto;
+    if (fStatus) fStatus.value = record.status;
+    if (fFecha) fFecha.value = record.fecha_gestion === '-' ? '' : record.fecha_gestion;
+    if (fSolicitud) fSolicitud.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
+    if (fCodigo) fCodigo.value = record.codigo === '-' ? '' : record.codigo;
+    if (fCheckin) fCheckin.value = record.checkin === '-' ? '' : record.checkin;
+    if (fMonto) fMonto.value = record.monto === '-' ? '' : record.monto;
+    if (fOrigen) fOrigen.value = record.origen_tabla === '-' ? '' : record.origen_tabla;
+    if (fObservacion) fObservacion.value = record.observacion === '-' ? '' : record.observacion;
+
+    if (btnDeleteModal) btnDeleteModal.classList.remove('hidden');
+    if (btnSubmitModal) btnSubmitModal.textContent = 'Guardar Cambios';
+
+    modal.showModal();
+  }
+
+  // Eventos de filtrado
+  searchInput?.addEventListener('input', applyFilters);
+  statusSelect?.addEventListener('change', applyFilters);
+
+  resetBtn?.addEventListener('click', () => {
+    if (statusSelect) statusSelect.value = 'ALL';
+    if (searchInput) searchInput.value = '';
+    applyFilters();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const targetStatus = pill.dataset.statusPill ?? 'ALL';
+      if (!statusSelect) return;
+      statusSelect.value = statusSelect.value === targetStatus ? 'ALL' : targetStatus;
+      applyFilters();
+    });
+  });
+
+  // Clic o Enter sobre cualquier fila de la tabla -> abre la ventana con TODA la información editable
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
+    if (!row || !row.dataset.rowRecord) return;
+
+    const record = JSON.parse(row.dataset.rowRecord) as ClienteRecord;
+    openClientModal(record);
+  });
+
+  tbody?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
+    if (!row || !row.dataset.rowRecord) return;
+
+    event.preventDefault();
+    const record = JSON.parse(row.dataset.rowRecord) as ClienteRecord;
+    openClientModal(record);
+  });
+
+  // Abrir modal para Nuevo Cliente
+  btnOpenNew?.addEventListener('click', () => {
+    if (!modal || !form) return;
+    form.reset();
+    if (fId) fId.value = '';
+    if (modalTitle) modalTitle.textContent = 'Nuevo Registro de Cliente';
+    if (modalSubtitle) modalSubtitle.textContent = 'Ingresa los datos para registrar en Cloudflare D1';
+    if (btnDeleteModal) btnDeleteModal.classList.add('hidden');
+    if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Cliente';
+    modal.showModal();
+  });
+
+  btnCloseModal?.addEventListener('click', () => modal?.close());
+  btnCancelModal?.addEventListener('click', () => modal?.close());
+
+  if (modal && !('closedBy' in HTMLDialogElement.prototype)) {
+    modal.addEventListener('click', (event) => {
+      if (event.target !== modal) return;
+      const rect = modal.getBoundingClientRect();
+      const isDialogContent =
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width;
+      if (isDialogContent) return;
+      modal.close();
+    });
+  }
+
+  // Eliminar cliente desde dentro del modal
+  btnDeleteModal?.addEventListener('click', async () => {
+    const idVal = fId?.value?.trim();
+    if (!idVal) return;
+    const id = Number(idVal);
+
+    if (!window.confirm(`¿Estás seguro de eliminar el cliente #${id} de la base de datos D1?`)) {
+      return;
+    }
+
+    btnDeleteModal.disabled = true;
+    try {
+      const response = await fetch(`/api/clientes?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+        row?.remove();
+        recalculateStatusCounts();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Cliente #${id} eliminado de D1`);
+      }
+    } finally {
+      btnDeleteModal.disabled = false;
+    }
+  });
+
+  // Guardar Cambios o Crear Cliente en Cloudflare D1
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const idVal = String(formData.get('id') ?? '').trim();
+
+    const payload = {
+      id: idVal ? Number(idVal) : undefined,
+      contacto: String(formData.get('contacto') ?? '').trim(),
+      status: String(formData.get('status') ?? 'Pendiente Cotizacion') as ClienteStatus,
+      codigo: String(formData.get('codigo') ?? '').trim() || '-',
+      fecha_gestion: String(formData.get('fecha_gestion') ?? '').trim() || '-',
+      solicitud_vuelo: String(formData.get('solicitud_vuelo') ?? '').trim() || '-',
+      monto: String(formData.get('monto') ?? '').trim() || '-',
+      checkin: String(formData.get('checkin') ?? '').trim() || '-',
+      origen_tabla: String(formData.get('origen_tabla') ?? '').trim() || 'Registro Manual',
+      observacion: String(formData.get('observacion') ?? '').trim() || '-',
+    };
+
+    if (btnSubmitModal) btnSubmitModal.disabled = true;
+
+    try {
+      const method = idVal ? 'PATCH' : 'POST';
+      const response = await fetch('/api/clientes', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; data?: ClienteRecord };
+
+      if (response.ok && result.ok && result.data) {
+        const updated = result.data;
+
+        if (!idVal) {
+          // Nuevo registro: recargar para insertar la fila completa ordenada
+          modal?.close();
+          window.location.reload();
+          return;
+        }
+
+        // Actualizar la fila en tiempo real sin perder el filtro actual
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
+        const cfg = STATUS_CONFIGS[updated.status] ?? STATUS_CONFIGS['Pendiente Cotizacion'];
+
+        if (row) {
+          row.dataset.rowStatus = updated.status;
+          row.dataset.rowRecord = JSON.stringify(updated);
+
+          const cellContacto = row.querySelector<HTMLElement>(`[data-cell-contacto="${updated.id}"]`);
+          const badge = row.querySelector<HTMLElement>(`[data-badge-for="${updated.id}"]`);
+          const dot = row.querySelector<HTMLElement>(`[data-dot-for="${updated.id}"]`);
+          const label = row.querySelector<HTMLElement>(`[data-label-for="${updated.id}"]`);
+          const cellFecha = row.querySelector<HTMLElement>(`[data-cell-fecha="${updated.id}"]`);
+          const cellVuelo = row.querySelector<HTMLElement>(`[data-cell-vuelo="${updated.id}"]`);
+          const cellObs = row.querySelector<HTMLElement>(`[data-cell-observacion="${updated.id}"]`);
+          const cellPrecio = row.querySelector<HTMLElement>(`[data-cell-precio="${updated.id}"]`);
+
+          if (cellContacto) cellContacto.textContent = updated.contacto;
+          if (badge) {
+            badge.className = `inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`;
+          }
+          if (dot) {
+            dot.className = `h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`;
+          }
+          if (label) {
+            label.textContent = updated.status;
+          }
+          if (cellFecha) cellFecha.textContent = updated.fecha_gestion;
+          if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
+          if (cellObs) cellObs.textContent = updated.observacion;
+          if (cellPrecio) {
+            cellPrecio.innerHTML =
+              updated.monto !== '-'
+                ? `<span class="text-secondary">${updated.monto}</span>`
+                : `<span class="text-primary/40 font-normal">-</span>`;
+          }
+        }
+
+        recalculateStatusCounts();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Cambios guardados en D1 (#${updated.id})`);
+      }
+    } finally {
+      if (btnSubmitModal) btnSubmitModal.disabled = false;
+    }
+  });
+</script>

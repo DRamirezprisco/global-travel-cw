@@ -1,0 +1,16 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Header from '@/components/common/Header.astro';
+import Hero from '@/components/home/Hero.astro';
+import { getAllClientes, getDatabase } from '@/utils/db';
+
+const db = getDatabase(Astro.locals);
+const clientes = await getAllClientes(db);
+---
+
+<Layout>
+  <Header totalRegistros={clientes.length} />
+  <main class="min-h-screen bg-base-muted pb-12">
+    <Hero clientes={clientes} />
+  </main>
+</Layout>

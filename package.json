@@ -1,0 +1,27 @@
+{
+  "name": "global-travel-cw",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "wrangler pages dev ./dist",
+    "astro": "astro",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 execute global-travel-db --local --file=./migrations/0001_init_clientes.sql",
+    "db:migrate:remote": "wrangler d1 execute global-travel-db --remote --file=./migrations/0001_init_clientes.sql"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.6.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "astro": "^5.12.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@cloudflare/workers-types": "^4.20260116.0",
+    "typescript": "^5.8.0",
+    "wrangler": "~4.20.0"
+  }
+}

@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+@theme {
+  /* Primary: Azul Rey (Royal Blue) */
+  --color-primary: #1e3a8a;
+  --color-primary-light: #1d4ed8;
+  --color-primary-dark: #172554;
+
+  /* Secondary: Rojo (Red) */
+  --color-secondary: #dc2626;
+  --color-secondary-light: #ef4444;
+  --color-secondary-dark: #991b1b;
+
+  /* Base: Main background color */
+  --color-base: #ffffff;
+  --color-base-muted: #f8fafc;
+  --color-base-border: #e2e8f0;
+
+  /* Colores exactos de las etiquetas/círculos de la Página 1 de ReporteSemanal.docx */
+
+  /* 1. Pendiente Cotizacion -> Elipse 1: Rojo (#FF0000 / borde #C00000) */
+  --color-status-cotizacion-dot: #ff0000;
+  --color-status-cotizacion-bg: #ffe5e5;
+  --color-status-cotizacion-text: #990000;
+  --color-status-cotizacion-border: #c00000;
+
+  /* 2. Cotizacion Enviada -> Elipse 5/12: Amarillo / Ámbar (#FFFF00 / #FFC000) */
+  --color-status-enviada-dot: #ffc000;
+  --color-status-enviada-bg: #fff9db;
+  --color-status-enviada-text: #7a5900;
+  --color-status-enviada-border: #ffc000;
+
+  /* 3. Reserva por 24h -> Elipse 2: Azul Cielo / Celeste (#00B0F0) */
+  --color-status-reserva24-dot: #00b0f0;
+  --color-status-reserva24-bg: #e0f7ff;
+  --color-status-reserva24-text: #005a7a;
+  --color-status-reserva24-border: #00b0f0;
+
+  /* 4. Reserva Emitida -> Elipse 4: Verde Lima (#00FF00) */
+  --color-status-emitida-dot: #00ff00;
+  --color-status-emitida-bg: #e6ffe6;
+  --color-status-emitida-text: #006600;
+  --color-status-emitida-border: #00cc00;
+
+  /* 5. Pago Pendiente Factura -> Elipse 3: Morado / Púrpura (#7030A0) */
+  --color-status-factura-dot: #7030a0;
+  --color-status-factura-bg: #f3eaf9;
+  --color-status-factura-text: #4a1f6a;
+  --color-status-factura-border: #7030a0;
+
+  /* 6. Pago Pendiente Tickete -> Elipse 8: Azul Acero (#2F5496 / borde #8EAADB) */
+  --color-status-tickete-dot: #2f5496;
+  --color-status-tickete-bg: #e8eef7;
+  --color-status-tickete-text: #1f3763;
+  --color-status-tickete-border: #2f5496;
+
+  /* 7. Cambio Tickets -> Elipse 10: Fucsia / Rosa Intenso (#FF0066) */
+  --color-status-cambio-dot: #ff0066;
+  --color-status-cambio-bg: #ffe5f0;
+  --color-status-cambio-text: #99003d;
+  --color-status-cambio-border: #ff0066;
+
+  /* 8. Visas -> Elipse 23: Magenta / Ciruela (#CC3399) */
+  --color-status-visas-dot: #cc3399;
+  --color-status-visas-bg: #faebf5;
+  --color-status-visas-text: #7a1f5c;
+  --color-status-visas-border: #cc3399;
+
+  /* 9. Consultas -> Elipse 9: Verde Oliva (#669900) */
+  --color-status-consultas-dot: #669900;
+  --color-status-consultas-bg: #f0f7e6;
+  --color-status-consultas-text: #3d5c00;
+  --color-status-consultas-border: #669900;
+
+  /* 10. Pagos Demorados(lista negra) -> Elipse 11: Gris (#A5A5A5 / borde #7F7F7F) */
+  --color-status-listanegra-dot: #a5a5a5;
+  --color-status-listanegra-bg: #ededed;
+  --color-status-listanegra-text: #404040;
+  --color-status-listanegra-border: #7f7f7f;
+}
+
+/* Responsive Data Table with Sticky Context & Container Queries */
+.table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(720px, 76vh);
+  container-type: inline-size;
+}
+
+.clientes-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  --label-2: "Estatus";
+  --label-3: "Fecha";
+  --label-4: "Datos del Vuelo";
+  --label-5: "Observación";
+  --label-6: "Precio";
+}
+
+.clientes-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+}
+
+.clientes-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 10;
+  background-color: var(--color-base);
+}
+
+.clientes-table tbody tr:hover th {
+  background-color: var(--color-base-muted);
+}
+
+@container (width < 700px) {
+  .clientes-table,
+  .clientes-table thead,
+  .clientes-table tbody,
+  .clientes-table tr,
+  .clientes-table th,
+  .clientes-table td {
+    display: block;
+  }
+
+  .clientes-table thead {
+    display: none;
+  }
+
+  .clientes-table tbody tr {
+    margin-block-end: 1rem;
+    border: 1px solid var(--color-base-border);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .clientes-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 15;
+    background-color: var(--color-base-muted);
+    border-bottom: 1px solid var(--color-base-border);
+  }
+
+  .clientes-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--color-base-border);
+  }
+
+  .clientes-table td:last-child {
+    border-bottom: none;
+  }
+
+  .clientes-table td:nth-child(2)::before {
+    content: var(--label-2) ": ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .clientes-table td:nth-child(3)::before {
+    content: var(--label-3) ": ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .clientes-table td:nth-child(4)::before {
+    content: var(--label-4) ": ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .clientes-table td:nth-child(5)::before {
+    content: var(--label-5) ": ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .clientes-table td:nth-child(6)::before {
+    content: var(--label-6) ": ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+}

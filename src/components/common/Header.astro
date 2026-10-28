@@ -1,0 +1,55 @@
+---
+import { REPORT_HEADER_INFO } from '@/constants/site';
+
+interface Props {
+  totalRegistros: number;
+}
+
+const { totalRegistros } = Astro.props;
+---
+
+<header class="bg-primary text-base border-b-4 border-secondary shadow-md">
+  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="flex items-start sm:items-center gap-4">
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-base font-black text-xl shadow-sm">
+          GT
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-base">
+              {REPORT_HEADER_INFO.agencyName}
+            </h1>
+            <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-bold text-base">
+              {REPORT_HEADER_INFO.location}
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-dark px-2.5 py-0.5 text-xs font-medium text-base border border-primary-light">
+              <span class="h-2 w-2 rounded-full bg-status-emitida-border"></span>
+              Cloudflare D1 Activo
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm text-base-muted opacity-90 mt-1">
+            {REPORT_HEADER_INFO.subtitle} — Emitido: <strong class="font-semibold">{REPORT_HEADER_INFO.emissionDate}</strong> · Responsable: <strong class="font-semibold">{REPORT_HEADER_INFO.responsible}</strong>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="rounded-lg bg-primary-dark px-3.5 py-2 border border-primary-light text-xs sm:text-sm">
+          <span class="opacity-80">Total Registros Unificados:</span>
+          <strong id="header-total-count" class="ml-1.5 text-base font-extrabold text-base">
+            {totalRegistros}
+          </strong>
+        </div>
+
+        <button
+          type="button"
+          id="btn-open-new-modal"
+          class="inline-flex items-center gap-2 rounded-lg bg-secondary hover:bg-secondary-light active:bg-secondary-dark text-base font-semibold px-4 py-2.5 text-sm shadow-sm transition cursor-pointer"
+        >
+          <span>+ Nuevo Cliente</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
