@@ -48,15 +48,23 @@ export const INITIAL_ESTATUS_SEED: Array<{ nombre: string; codigo: string; color
   { nombre: 'Finalizado', codigo: 'finalizado', color: '#059669' },
 ];
 
-let isDbInitializing = false;
+let dbInitPromise: Promise<void> | null = null;
 
 /**
- * Asegura la creación e inicialización de las tablas `estatus`, `pendientes` y `pagos` en Cloudflare D1.
+ * Asegura la creación e inicialización de las tablas `estatus`, `pendientes`, `pagos` y `contactos` en Cloudflare D1.
+ * Utiliza una promesa compartida para evitar condiciones de carrera en llamadas concurrentes (como Promise.all en SSR).
  */
-export async function ensureDatabaseInitialized(db: D1Database): Promise<void> {
-  if (isDbInitializing) return;
-  isDbInitializing = true;
+export function ensureDatabaseInitialized(db: D1Database): Promise<void> {
+  if (!dbInitPromise) {
+    dbInitPromise = runDatabaseInitialization(db).catch((err) => {
+      dbInitPromise = null; // Permitir reintento en caso de error
+      throw err;
+    });
+  }
+  return dbInitPromise;
+}
 
+async function runDatabaseInitialization(db: D1Database): Promise<void> {
   try {
     // 1. Tabla Estatus (Exclusiva para Pendientes)
     await db
@@ -393,8 +401,9 @@ export async function ensureDatabaseInitialized(db: D1Database): Promise<void> {
         }
       } catch {}
     }
-  } finally {
-    isDbInitializing = false;
+  } catch (error) {
+    console.error('Error inicializando base de datos D1:', error);
+    throw error;
   }
 }
 
