@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "deploy": "wrangler pages deploy ./dist",
     "preview": "wrangler pages dev ./dist",
     "astro": "astro",
     "cf-typegen": "wrangler types",
