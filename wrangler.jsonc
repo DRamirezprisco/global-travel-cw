@@ -1,14 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "global-travel",
+  "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "global-travel-db",
-      "database_id": "f30a41d1-d9e2-49e7-a7ef-3cadb48f45b3",
-    },
-  ],
+      "database_id": "f30a41d1-d9e2-49e7-a7ef-3cadb48f45b3"
+    }
+  ]
 }
