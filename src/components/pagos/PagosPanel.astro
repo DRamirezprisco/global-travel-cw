@@ -1,0 +1,933 @@
+---
+import { PAGOS_GRID_COLUMNS } from '@/constants/site';
+import { PAGO_STATUS_CONFIGS, PAGO_STATUS_LIST } from '@/constants/statuses';
+import type { PagoRecord, PagoStatus } from '@/types';
+
+interface Props {
+  pagos: PagoRecord[];
+}
+
+const { pagos } = Astro.props;
+
+const statusCounts = PAGO_STATUS_LIST.reduce(
+  (acc, status) => {
+    acc[status] = pagos.filter((p) => p.status === status).length;
+    return acc;
+  },
+  {} as Record<PagoStatus, number>
+);
+---
+
+<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <!-- Píldoras de Estatus de Pagos (Pendiente, Abono, Demorados, Pagado) -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      {
+        PAGO_STATUS_LIST.map((statusKey) => {
+          const cfg = PAGO_STATUS_CONFIGS[statusKey];
+          const count = statusCounts[statusKey] ?? 0;
+          return (
+            <button
+              type="button"
+              data-status-pill={statusKey}
+              title={cfg.shortDescription}
+              class={`status-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer ${cfg.badgeClass}`}
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`} />
+                <span class="text-xs font-bold truncate">{cfg.label}</span>
+              </div>
+              <span
+                data-status-count={statusKey}
+                class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })
+      }
+    </div>
+  </div>
+
+  <!-- Barra de búsqueda por nombre y contador de registros -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        id="input-search-pagos"
+        placeholder="Buscar por nombre..."
+        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+      />
+    </div>
+
+    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
+      <span id="visible-rows-counter">
+        Mostrando <strong>{pagos.length}</strong> de <strong>{pagos.length}</strong>
+      </span>
+      <span
+        id="d1-sync-toast"
+        class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition"
+      >
+        Guardado en D1
+      </span>
+    </div>
+  </div>
+
+  <!-- Tabla Grid Maestra de Pagos (6 Columnas) -->
+  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+    <div
+      tabindex="0"
+      role="region"
+      aria-labelledby="pagos-table-caption"
+      class="table-wrapper"
+    >
+      <table class="clientes-table text-left text-sm">
+        <caption id="pagos-table-caption" class="sr-only">
+          Tabla de control y gestión de pagos de Global Travel CW
+        </caption>
+        <thead class="bg-primary text-base text-xs uppercase tracking-wider">
+          <tr>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[220px]">
+              {PAGOS_GRID_COLUMNS.contacto}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[170px]">
+              {PAGOS_GRID_COLUMNS.status}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[120px]">
+              {PAGOS_GRID_COLUMNS.fecha_gestion}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[220px]">
+              {PAGOS_GRID_COLUMNS.solicitud_vuelo}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[280px]">
+              {PAGOS_GRID_COLUMNS.observacion}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[130px]">
+              {PAGOS_GRID_COLUMNS.monto}
+            </th>
+          </tr>
+        </thead>
+        <tbody id="pagos-tbody" class="divide-y divide-base-border">
+          {
+            pagos.map((pago) => {
+              const cfg = PAGO_STATUS_CONFIGS[pago.status] ?? PAGO_STATUS_CONFIGS['Pendiente'];
+              return (
+                <tr
+                  tabindex="0"
+                  role="button"
+                  aria-label={`Abrir detalle de pago de ${pago.contacto}`}
+                  data-row-id={pago.id}
+                  data-row-status={pago.status}
+                  data-row-name={pago.contacto}
+                  data-row-record={JSON.stringify(pago)}
+                  class="hover:bg-base-muted focus:bg-base-muted focus:outline-none transition-colors cursor-pointer"
+                >
+                  <th
+                    scope="row"
+                    data-cell-contacto={pago.id}
+                    class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
+                  >
+                    <span class="text-sm leading-snug">{pago.contacto}</span>
+                  </th>
+
+                  <td class="py-3.5 px-4 align-middle">
+                    <span
+                      data-badge-for={pago.id}
+                      class={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`}
+                    >
+                      <span
+                        data-dot-for={pago.id}
+                        class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`}
+                      />
+                      <span data-label-for={pago.id}>{cfg.label}</span>
+                    </span>
+                  </td>
+
+                  <td
+                    data-cell-fecha={pago.id}
+                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary whitespace-nowrap"
+                  >
+                    {pago.fecha_gestion}
+                  </td>
+
+                  <td
+                    data-cell-vuelo={pago.id}
+                    class="py-3.5 px-4 align-middle text-xs font-semibold text-primary"
+                  >
+                    {pago.solicitud_vuelo}
+                  </td>
+
+                  <td
+                    data-cell-observacion={pago.id}
+                    class="py-3.5 px-4 align-middle text-xs text-primary/90 leading-relaxed"
+                  >
+                    {pago.observacion}
+                  </td>
+
+                  <td
+                    data-cell-precio={pago.id}
+                    class="py-3.5 px-4 align-middle text-xs font-extrabold"
+                  >
+                    {pago.monto !== '-' ? (
+                      <span class="text-secondary">
+                        {pago.monto}
+                        {pago.moneda &&
+                        !pago.monto.toLowerCase().includes(pago.moneda.toLowerCase()) &&
+                        !(pago.moneda === 'USD' && pago.monto.includes('$'))
+                          ? ` ${pago.moneda}`
+                          : ''}
+                      </span>
+                    ) : (
+                      <span class="text-primary/40 font-normal">-</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Modal / Diálogo para Ver o Editar Registro de Pago -->
+<dialog
+  id="modal-pago"
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border border-base-border overflow-hidden"
+  aria-labelledby="modal-pago-title"
+>
+  <form id="form-pago" method="dialog" class="flex flex-col">
+    <!-- Cabecera del Modal -->
+    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+      <div>
+        <h3 id="modal-pago-title" class="text-lg font-extrabold tracking-tight">
+          Detalle de Pago
+        </h3>
+      </div>
+      <button
+        type="button"
+        id="btn-close-modal-pago"
+        class="rounded-lg bg-base/10 hover:bg-base/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+      >
+        Cerrar ✕
+      </button>
+    </div>
+
+    <!-- Cuerpo del Formulario -->
+    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+      <input type="hidden" id="field-pago-id" name="id" value="" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Cliente -->
+        <div class="sm:col-span-2">
+          <label for="field-pago-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
+            Cliente
+          </label>
+          <input
+            type="text"
+            id="field-pago-contacto"
+            name="contacto"
+            required
+            placeholder="Cliente"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Estatus -->
+        <div>
+          <label for="field-pago-status" class="block text-xs font-bold uppercase text-primary mb-1">
+            Estatus
+          </label>
+          <select
+            id="field-pago-status"
+            name="status"
+            required
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            {
+              PAGO_STATUS_LIST.map((st) => (
+                <option value={st}>{PAGO_STATUS_CONFIGS[st].label}</option>
+              ))
+            }
+          </select>
+        </div>
+
+        <!-- Fecha -->
+        <div>
+          <label for="field-pago-fecha" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha
+          </label>
+          <input
+            type="text"
+            id="field-pago-fecha"
+            name="fecha_gestion"
+            placeholder="DD/MM/AA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Precio -->
+        <div>
+          <label for="field-pago-monto" class="block text-xs font-bold uppercase text-primary mb-1">
+            Precio
+          </label>
+          <input
+            type="text"
+            id="field-pago-monto"
+            name="monto"
+            placeholder="0.00"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Moneda -->
+        <div>
+          <label for="field-pago-moneda" class="block text-xs font-bold uppercase text-primary mb-1">
+            Moneda
+          </label>
+          <select
+            id="field-pago-moneda"
+            name="moneda"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="Fls">Fls</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+
+        <!-- Concepto -->
+        <div class="sm:col-span-2">
+          <label for="field-pago-vuelo" class="block text-xs font-bold uppercase text-primary mb-1">
+            Concepto
+          </label>
+          <input
+            type="text"
+            id="field-pago-vuelo"
+            name="solicitud_vuelo"
+            placeholder="Concepto"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Observación -->
+        <div class="sm:col-span-2">
+          <label for="field-pago-observacion" class="block text-xs font-bold uppercase text-primary mb-1">
+            Observación
+          </label>
+          <textarea
+            id="field-pago-observacion"
+            name="observacion"
+            rows="3"
+            placeholder="Observación"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie del Modal con Botones -->
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+      <div>
+        <button
+          type="button"
+          id="btn-delete-modal-pago"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 border border-secondary px-4 py-2 text-xs font-extrabold text-secondary hover:bg-secondary hover:text-base transition cursor-pointer"
+        >
+          Eliminar Registro
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2.5 ml-auto">
+        <button
+          type="button"
+          id="btn-cancel-modal-pago"
+          class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-semibold text-primary hover:bg-base-muted transition cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          id="btn-open-registrar-pago"
+          class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 text-xs shadow-xs transition cursor-pointer"
+        >
+          💳 Registrar Pagos
+        </button>
+        <button
+          type="submit"
+          id="btn-submit-modal-pago"
+          class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-5 py-2 text-xs shadow-xs transition cursor-pointer"
+        >
+          Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Ventana Modal Específica: REGISTRAR PAGO -->
+<dialog
+  id="modal-registrar-pago"
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-lg w-[92vw] border-2 border-emerald-600 overflow-hidden"
+  aria-labelledby="modal-reg-pago-title"
+>
+  <form id="form-registrar-pago" class="flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between bg-emerald-700 px-6 py-4 text-white">
+      <div>
+        <h3 id="modal-reg-pago-title" class="text-base sm:text-lg font-extrabold flex items-center gap-2">
+          <span>💳</span>
+          <span>Registrar Pago / Abono</span>
+        </h3>
+        <p class="text-xs text-emerald-100 opacity-90 mt-0.5">
+          Ingresa el monto recibido para este cliente
+        </p>
+      </div>
+      <button
+        type="button"
+        id="btn-close-modal-reg-pago"
+        class="rounded-lg bg-emerald-800 hover:bg-emerald-900 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+      >
+        Cerrar ✕
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+      <input type="hidden" id="reg-field-id" value="" />
+
+      <!-- Tarjeta resumen cliente y deuda -->
+      <div class="p-3.5 rounded-xl bg-base-muted border border-base-border space-y-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-primary/60 font-bold uppercase">Cliente:</span>
+          <span id="reg-display-cliente" class="font-extrabold text-primary text-sm truncate max-w-[280px]">-</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-primary/60 font-bold uppercase">Monto Total Registrado:</span>
+          <span id="reg-display-total" class="font-extrabold text-secondary text-sm">-</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-primary/60 font-bold uppercase">Estatus Actual:</span>
+          <span id="reg-display-status" class="font-bold text-primary">-</span>
+        </div>
+      </div>
+
+      <!-- Concepto -->
+      <div>
+        <label for="reg-field-concepto" class="block text-xs font-bold uppercase text-primary mb-1">
+          Concepto / Servicio *
+        </label>
+        <input
+          type="text"
+          id="reg-field-concepto"
+          name="concepto"
+          required
+          placeholder="Ej. Boleto aéreo CUR-BOG, Reserva emitida..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+        />
+        <p class="text-xs text-primary/60 mt-1">Prellenado con el concepto actual del pago.</p>
+      </div>
+
+      <!-- Fecha y Hora -->
+      <div>
+        <label for="reg-field-fecha" class="block text-xs font-bold uppercase text-primary mb-1">
+          Fecha y Hora del Pago *
+        </label>
+        <input
+          type="text"
+          id="reg-field-fecha"
+          name="fecha"
+          required
+          placeholder="DD/MM/AA HH:mm"
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-medium focus:border-primary focus:bg-base focus:outline-none"
+        />
+        <p class="text-xs text-primary/60 mt-1">Fecha y hora del momento en que se efectúa el pago.</p>
+      </div>
+
+      <!-- Monto a Registrar -->
+      <div>
+        <label for="reg-field-monto" class="block text-xs font-bold uppercase text-primary mb-1">
+          Monto Recibido *
+        </label>
+        <input
+          type="text"
+          id="reg-field-monto"
+          name="monto"
+          required
+          placeholder="Ej. 400 o 819 Fls"
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2.5 text-secondary font-extrabold text-lg focus:border-emerald-600 focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <!-- Indicador dinámico de validación -->
+      <div id="reg-status-preview-box" class="p-3 rounded-lg border text-xs font-semibold bg-blue-50 border-blue-200 text-blue-900 transition">
+        <span id="reg-status-preview-text">
+          Ingresa un monto para previsualizar si se registrará como Abono o Pagado.
+        </span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+      <button
+        type="button"
+        id="btn-cancel-modal-reg-pago"
+        class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-semibold text-primary hover:bg-base-muted cursor-pointer"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        id="btn-submit-modal-reg-pago"
+        class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 text-xs shadow-xs transition cursor-pointer disabled:opacity-50"
+      >
+        Confirmar y Aplicar Pago
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  import { PAGO_STATUS_CONFIGS } from '@/constants/statuses';
+  import type { PagoRecord, PagoStatus } from '@/types';
+  import { getNowFormatted, parseMontoNumeric } from '@/utils/pagoHelpers';
+
+  const searchInput = document.querySelector<HTMLInputElement>('#input-search-pagos');
+  let selectedStatus = 'ALL';
+  const tbody = document.querySelector<HTMLTableSectionElement>('#pagos-tbody');
+  const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
+  const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
+
+  // Modal Principal de Pago
+  const modal = document.querySelector<HTMLDialogElement>('#modal-pago');
+  const form = document.querySelector<HTMLFormElement>('#form-pago');
+  const modalTitle = document.querySelector<HTMLElement>('#modal-pago-title');
+  const btnCloseModal = document.querySelector<HTMLButtonElement>('#btn-close-modal-pago');
+  const btnCancelModal = document.querySelector<HTMLButtonElement>('#btn-cancel-modal-pago');
+  const btnDeleteModal = document.querySelector<HTMLButtonElement>('#btn-delete-modal-pago');
+  const btnSubmitModal = document.querySelector<HTMLButtonElement>('#btn-submit-modal-pago');
+  const btnOpenRegistrarPago = document.querySelector<HTMLButtonElement>('#btn-open-registrar-pago');
+
+  const fId = document.querySelector<HTMLInputElement>('#field-pago-id');
+  const fContacto = document.querySelector<HTMLInputElement>('#field-pago-contacto');
+  const fStatus = document.querySelector<HTMLSelectElement>('#field-pago-status');
+  const fFecha = document.querySelector<HTMLInputElement>('#field-pago-fecha');
+  const fMonto = document.querySelector<HTMLInputElement>('#field-pago-monto');
+  const fMoneda = document.querySelector<HTMLSelectElement>('#field-pago-moneda');
+  const fVuelo = document.querySelector<HTMLInputElement>('#field-pago-vuelo');
+  const fObservacion = document.querySelector<HTMLTextAreaElement>('#field-pago-observacion');
+
+  // Modal Registrar Pago
+  const modalReg = document.querySelector<HTMLDialogElement>('#modal-registrar-pago');
+  const formReg = document.querySelector<HTMLFormElement>('#form-registrar-pago');
+  const btnCloseReg = document.querySelector<HTMLButtonElement>('#btn-close-modal-reg-pago');
+  const btnCancelReg = document.querySelector<HTMLButtonElement>('#btn-cancel-modal-reg-pago');
+  const btnSubmitReg = document.querySelector<HTMLButtonElement>('#btn-submit-modal-reg-pago');
+
+  const regFieldId = document.querySelector<HTMLInputElement>('#reg-field-id');
+  const regDisplayCliente = document.querySelector<HTMLElement>('#reg-display-cliente');
+  const regDisplayTotal = document.querySelector<HTMLElement>('#reg-display-total');
+  const regDisplayStatus = document.querySelector<HTMLElement>('#reg-display-status');
+  const regFieldConcepto = document.querySelector<HTMLInputElement>('#reg-field-concepto');
+  const regFieldFecha = document.querySelector<HTMLInputElement>('#reg-field-fecha');
+  const regFieldMonto = document.querySelector<HTMLInputElement>('#reg-field-monto');
+  const regPreviewBox = document.querySelector<HTMLElement>('#reg-status-preview-box');
+  const regPreviewText = document.querySelector<HTMLElement>('#reg-status-preview-text');
+
+  let activePagoRecord: PagoRecord | null = null;
+
+  function showSyncToast(text = 'Guardado en D1') {
+    if (!syncToast) return;
+    syncToast.textContent = text;
+    syncToast.classList.remove('hidden');
+    window.setTimeout(() => {
+      syncToast.classList.add('hidden');
+    }, 2600);
+  }
+
+  function applyFilters() {
+    if (!tbody) return;
+    const query = (searchInput?.value ?? '').toLowerCase().trim();
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+
+    let visibleCount = 0;
+    for (const row of rows) {
+      const rowStatus = row.dataset.rowStatus ?? '';
+      const rowName = (row.dataset.rowName ?? '').toLowerCase();
+      const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
+      const matchesQuery = !query || rowName.includes(query);
+
+      if (matchesStatus && matchesQuery) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    if (visibleCounter) {
+      visibleCounter.innerHTML = `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
+      if (selectedStatus !== 'ALL' && pill.dataset.statusPill === selectedStatus) {
+        pill.classList.add('ring-2', 'ring-primary', 'scale-[1.02]');
+      } else {
+        pill.classList.remove('ring-2', 'ring-primary', 'scale-[1.02]');
+      }
+    });
+  }
+
+  function recalculateStatusCounts() {
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const counts: Record<string, number> = {};
+
+    for (const row of rows) {
+      const st = row.dataset.rowStatus ?? '';
+      counts[st] = (counts[st] || 0) + 1;
+    }
+
+    document.querySelectorAll<HTMLElement>('[data-status-count]').forEach((badge) => {
+      const st = badge.dataset.statusCount ?? '';
+      badge.textContent = String(counts[st] || 0);
+    });
+  }
+
+  function openPagoModal(record: PagoRecord) {
+    if (!modal || !form) return;
+    activePagoRecord = record;
+
+    if (modalTitle) {
+      modalTitle.textContent = `Detalle de Pago #${record.id}`;
+    }
+
+    if (fId) fId.value = String(record.id);
+    if (fContacto) fContacto.value = record.contacto;
+    if (fStatus) fStatus.value = record.status;
+    if (fFecha) fFecha.value = record.fecha_gestion === '-' ? '' : record.fecha_gestion;
+    if (fMonto) fMonto.value = record.monto === '-' ? '' : record.monto;
+    if (fMoneda) {
+      const isUsd =
+        record.moneda === 'USD' ||
+        record.monto.includes('$') ||
+        record.monto.toUpperCase().includes('USD');
+      fMoneda.value = isUsd ? 'USD' : (record.moneda || 'Fls');
+    }
+    if (fVuelo) fVuelo.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
+    if (fObservacion) fObservacion.value = record.observacion === '-' ? '' : record.observacion;
+
+    if (btnDeleteModal) btnDeleteModal.classList.remove('hidden');
+    if (btnSubmitModal) btnSubmitModal.textContent = 'Guardar Cambios';
+
+    modal.showModal();
+  }
+
+  // Actualización en tiempo real del indicador de "Abono" o "Pagado"
+  function updateRegStatusPreview() {
+    if (!activePagoRecord || !regFieldMonto || !regPreviewBox || !regPreviewText) return;
+
+    const montoIngresado = parseMontoNumeric(regFieldMonto.value);
+    const montoTotal = parseMontoNumeric(activePagoRecord.monto);
+
+    if (montoIngresado <= 0) {
+      regPreviewBox.className = 'p-3 rounded-lg border text-xs font-semibold bg-blue-50 border-blue-200 text-blue-900';
+      regPreviewText.innerHTML = `Monto de la deuda: <strong>${activePagoRecord.monto}</strong>. Ingresa el monto para determinar si será Abono o Pagado.`;
+      return;
+    }
+
+    if (montoTotal > 0 && montoIngresado < montoTotal) {
+      regPreviewBox.className = 'p-3 rounded-lg border text-xs font-semibold bg-amber-50 border-amber-300 text-amber-900';
+      regPreviewText.innerHTML = `🟡 <strong>Abono:</strong> El monto ingresado (<strong>${montoIngresado}</strong>) es MENOR al total (<strong>${montoTotal}</strong>). El estatus se actualizará automáticamente a <strong>Abono</strong>.`;
+    } else {
+      regPreviewBox.className = 'p-3 rounded-lg border text-xs font-semibold bg-emerald-50 border-emerald-300 text-emerald-900';
+      regPreviewText.innerHTML = `🟢 <strong>Pagado:</strong> El monto ingresado (<strong>${montoIngresado}</strong>) CUBRE el total (<strong>${montoTotal}</strong>). El estatus se actualizará automáticamente a <strong>Pagado</strong>.`;
+    }
+  }
+
+  // Abrir Modal "Registrar Pago"
+  btnOpenRegistrarPago?.addEventListener('click', () => {
+    if (!activePagoRecord || !modalReg || !formReg) return;
+
+    if (regFieldId) regFieldId.value = String(activePagoRecord.id);
+    if (regDisplayCliente) regDisplayCliente.textContent = activePagoRecord.contacto;
+    if (regDisplayTotal) regDisplayTotal.textContent = activePagoRecord.monto !== '-' ? activePagoRecord.monto : 'Sin monto definido';
+    if (regDisplayStatus) regDisplayStatus.textContent = activePagoRecord.status;
+
+    if (regFieldConcepto) {
+      regFieldConcepto.value = activePagoRecord.solicitud_vuelo !== '-' ? activePagoRecord.solicitud_vuelo : '';
+    }
+    if (regFieldFecha) {
+      regFieldFecha.value = getNowFormatted();
+    }
+    if (regFieldMonto) {
+      regFieldMonto.value = '';
+    }
+
+    updateRegStatusPreview();
+    modalReg.showModal();
+    regFieldMonto?.focus();
+  });
+
+  regFieldMonto?.addEventListener('input', updateRegStatusPreview);
+  btnCloseReg?.addEventListener('click', () => modalReg?.close());
+  btnCancelReg?.addEventListener('click', () => modalReg?.close());
+
+  // Confirmar y aplicar registro de pago
+  formReg?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!activePagoRecord || !btnSubmitReg) return;
+
+    const montoRaw = regFieldMonto?.value.trim() || '';
+    const concepto = regFieldConcepto?.value.trim() || activePagoRecord.solicitud_vuelo || '-';
+    const fecha = regFieldFecha?.value.trim() || getNowFormatted();
+
+    const montoColocado = parseMontoNumeric(montoRaw);
+    if (montoColocado <= 0) {
+      alert('Por favor ingresa un monto válido mayor a 0.');
+      regFieldMonto?.focus();
+      return;
+    }
+
+    const montoTotal = parseMontoNumeric(activePagoRecord.monto);
+
+    // Regla de Negocio: Si monto colocado es menor al total -> Abono; si es igual o mayor -> Pagado
+    let newStatus: PagoStatus = 'Pagado';
+    if (montoTotal > 0 && montoColocado < montoTotal) {
+      newStatus = 'Abono';
+    } else {
+      newStatus = 'Pagado';
+    }
+
+    const detalleLog = `[${fecha}] ${newStatus === 'Pagado' ? 'PAGO TOTAL' : 'ABONO'}: ${montoRaw} (${concepto})`;
+    const updatedObs =
+      activePagoRecord.observacion && activePagoRecord.observacion !== '-'
+        ? `${activePagoRecord.observacion} | ${detalleLog}`
+        : detalleLog;
+
+    const payload = {
+      id: activePagoRecord.id,
+      status: newStatus,
+      fecha_gestion: fecha,
+      solicitud_vuelo: concepto,
+      observacion: updatedObs,
+    };
+
+    btnSubmitReg.disabled = true;
+    btnSubmitReg.textContent = 'Aplicando pago...';
+
+    try {
+      const response = await fetch('/api/pagos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; data?: PagoRecord };
+
+      if (response.ok && result.ok && result.data) {
+        const updated = result.data;
+        activePagoRecord = updated;
+
+        // Actualizar fila en la tabla
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
+        const cfg = PAGO_STATUS_CONFIGS[updated.status] ?? PAGO_STATUS_CONFIGS['Pendiente'];
+
+        if (row) {
+          row.dataset.rowStatus = updated.status;
+          row.dataset.rowRecord = JSON.stringify(updated);
+
+          const badge = row.querySelector<HTMLElement>(`[data-badge-for="${updated.id}"]`);
+          const dot = row.querySelector<HTMLElement>(`[data-dot-for="${updated.id}"]`);
+          const label = row.querySelector<HTMLElement>(`[data-label-for="${updated.id}"]`);
+          const cellFecha = row.querySelector<HTMLElement>(`[data-cell-fecha="${updated.id}"]`);
+          const cellVuelo = row.querySelector<HTMLElement>(`[data-cell-vuelo="${updated.id}"]`);
+          const cellObs = row.querySelector<HTMLElement>(`[data-cell-observacion="${updated.id}"]`);
+          const cellPrecio = row.querySelector<HTMLElement>(`[data-cell-precio="${updated.id}"]`);
+
+          if (badge) badge.className = `inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`;
+          if (dot) dot.className = `h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`;
+          if (label) label.textContent = cfg.label;
+          if (cellFecha) cellFecha.textContent = updated.fecha_gestion;
+          if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
+          if (cellObs) cellObs.textContent = updated.observacion;
+          if (cellPrecio) {
+            const hasCurrency =
+              updated.moneda &&
+              !updated.monto.toLowerCase().includes(updated.moneda.toLowerCase()) &&
+              !(updated.moneda === 'USD' && updated.monto.includes('$'));
+            cellPrecio.innerHTML =
+              updated.monto !== '-'
+                ? `<span class="text-secondary">${updated.monto}${hasCurrency ? ' ' + updated.moneda : ''}</span>`
+                : `<span class="text-primary/40 font-normal">-</span>`;
+          }
+        }
+
+        recalculateStatusCounts();
+        applyFilters();
+        modalReg?.close();
+        modal?.close();
+        showSyncToast(`Pago registrado: marcado como "${newStatus}" (#${updated.id})`);
+      } else {
+        alert('Ocurrió un error al registrar el pago en D1.');
+      }
+    } catch {
+      alert('Error de conexión al registrar el pago.');
+    } finally {
+      btnSubmitReg.disabled = false;
+      btnSubmitReg.textContent = 'Confirmar y Aplicar Pago';
+    }
+  });
+
+  // Eventos de filtro
+  searchInput?.addEventListener('input', applyFilters);
+
+  document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const targetStatus = pill.dataset.statusPill ?? 'ALL';
+      selectedStatus = selectedStatus === targetStatus ? 'ALL' : targetStatus;
+      applyFilters();
+    });
+  });
+
+  // Clic en fila para abrir modal principal
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
+    if (!row || !row.dataset.rowRecord) return;
+
+    const record = JSON.parse(row.dataset.rowRecord) as PagoRecord;
+    openPagoModal(record);
+  });
+
+  tbody?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
+    if (!row || !row.dataset.rowRecord) return;
+
+    event.preventDefault();
+    const record = JSON.parse(row.dataset.rowRecord) as PagoRecord;
+    openPagoModal(record);
+  });
+
+  btnCloseModal?.addEventListener('click', () => modal?.close());
+  btnCancelModal?.addEventListener('click', () => modal?.close());
+
+  // Eliminar pago
+  btnDeleteModal?.addEventListener('click', async () => {
+    const idVal = fId?.value?.trim();
+    if (!idVal) return;
+    const id = Number(idVal);
+
+    if (!window.confirm(`¿Estás seguro de eliminar el registro de pago #${id} de la base de datos D1?`)) {
+      return;
+    }
+
+    btnDeleteModal.disabled = true;
+    try {
+      const response = await fetch(`/api/pagos?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+        row?.remove();
+        recalculateStatusCounts();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Registro #${id} eliminado de D1`);
+      }
+    } finally {
+      btnDeleteModal.disabled = false;
+    }
+  });
+
+  // Guardar cambios manuales en Cloudflare D1
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const idVal = String(formData.get('id') ?? '').trim();
+
+    const payload = {
+      id: idVal ? Number(idVal) : undefined,
+      contacto: String(formData.get('contacto') ?? '').trim(),
+      status: String(formData.get('status') ?? 'Pendiente') as PagoStatus,
+      fecha_gestion: String(formData.get('fecha_gestion') ?? '').trim() || '-',
+      solicitud_vuelo: String(formData.get('solicitud_vuelo') ?? '').trim() || '-',
+      monto: String(formData.get('monto') ?? '').trim() || '-',
+      moneda: String(formData.get('moneda') ?? 'Fls').trim() || 'Fls',
+      observacion: String(formData.get('observacion') ?? '').trim() || '-',
+    };
+
+    if (btnSubmitModal) btnSubmitModal.disabled = true;
+
+    try {
+      const method = idVal ? 'PATCH' : 'POST';
+      const response = await fetch('/api/pagos', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; data?: PagoRecord };
+
+      if (response.ok && result.ok && result.data) {
+        const updated = result.data;
+
+        if (!idVal) {
+          modal?.close();
+          window.location.reload();
+          return;
+        }
+
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
+        const cfg = PAGO_STATUS_CONFIGS[updated.status] ?? PAGO_STATUS_CONFIGS['Pendiente'];
+
+        if (row) {
+          row.dataset.rowStatus = updated.status;
+          row.dataset.rowName = updated.contacto;
+          row.dataset.rowRecord = JSON.stringify(updated);
+
+          const cellContacto = row.querySelector<HTMLElement>(`[data-cell-contacto="${updated.id}"]`);
+          const badge = row.querySelector<HTMLElement>(`[data-badge-for="${updated.id}"]`);
+          const dot = row.querySelector<HTMLElement>(`[data-dot-for="${updated.id}"]`);
+          const label = row.querySelector<HTMLElement>(`[data-label-for="${updated.id}"]`);
+          const cellFecha = row.querySelector<HTMLElement>(`[data-cell-fecha="${updated.id}"]`);
+          const cellVuelo = row.querySelector<HTMLElement>(`[data-cell-vuelo="${updated.id}"]`);
+          const cellObs = row.querySelector<HTMLElement>(`[data-cell-observacion="${updated.id}"]`);
+          const cellPrecio = row.querySelector<HTMLElement>(`[data-cell-precio="${updated.id}"]`);
+
+          if (cellContacto) cellContacto.textContent = updated.contacto;
+          if (badge) {
+            badge.className = `inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`;
+          }
+          if (dot) {
+            dot.className = `h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`;
+          }
+          if (label) {
+            label.textContent = cfg.label;
+          }
+          if (cellFecha) cellFecha.textContent = updated.fecha_gestion;
+          if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
+          if (cellObs) cellObs.textContent = updated.observacion;
+          if (cellPrecio) {
+            const hasCurrency =
+              updated.moneda &&
+              !updated.monto.toLowerCase().includes(updated.moneda.toLowerCase()) &&
+              !(updated.moneda === 'USD' && updated.monto.includes('$'));
+            cellPrecio.innerHTML =
+              updated.monto !== '-'
+                ? `<span class="text-secondary">${updated.monto}${hasCurrency ? ' ' + updated.moneda : ''}</span>`
+                : `<span class="text-primary/40 font-normal">-</span>`;
+          }
+        }
+
+        recalculateStatusCounts();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Pago #${updated.id} guardado en D1`);
+      }
+    } finally {
+      if (btnSubmitModal) btnSubmitModal.disabled = false;
+    }
+  });
+</script>

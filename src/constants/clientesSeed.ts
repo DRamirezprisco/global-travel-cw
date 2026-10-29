@@ -1,6 +1,6 @@
-import type { NewClienteRecord } from '@/types';
+import type { SeedRecord } from '@/types';
 
-export const CLIENTES_SEED: NewClienteRecord[] = [
+export const CLIENTES_SEED: SeedRecord[] = [
   {
     "contacto": "Jaime Goenaga Pax",
     "status": "Pendiente Cotizacion",
@@ -949,7 +949,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Pedro Autolavado Sandy",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "18/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -960,7 +960,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Jonathan Guanipa Pax Vzla",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "18/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -971,7 +971,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Diana Lovera Pax Vzla 2 / Hairik",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "12/10/26 | 19/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -982,7 +982,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Wendell American 2",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "05/10/26 | 23/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -993,7 +993,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "+599 9 677 5862",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "20/10/26 | 23/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -1004,7 +1004,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Mariale Salazar Pax Vzla",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "14/10/26 | 23/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -1015,7 +1015,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Mas Que Un Antojo",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "20/10/2623/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",
@@ -1026,7 +1026,7 @@ export const CLIENTES_SEED: NewClienteRecord[] = [
   },
   {
     "contacto": "Benjamin Gil",
-    "status": "Pagos Demorados(lista negra)",
+    "status": "Pagos Demorados",
     "fecha_gestion": "23/10/26",
     "codigo": "-",
     "solicitud_vuelo": "Cobranza / Saldo vencido",

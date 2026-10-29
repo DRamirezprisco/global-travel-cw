@@ -1,58 +1,88 @@
 ---
 import { GRID_COLUMNS } from '@/constants/site';
-import { CLIENTE_STATUS_LIST, STATUS_CONFIGS } from '@/constants/statuses';
-import type { ClienteRecord, ClienteStatus } from '@/types';
+import { ALL_CLIENTE_STATUS_LIST, CLIENTE_STATUS_LIST, STATUS_CONFIGS } from '@/constants/statuses';
+import type { ClienteRecord, ContactoRecord, EstatusRecord } from '@/types';
 
 interface Props {
   clientes: ClienteRecord[];
+  estatusList?: EstatusRecord[];
+  contactosList?: ContactoRecord[];
 }
 
-const { clientes } = Astro.props;
+const { clientes, estatusList = [], contactosList = [] } = Astro.props;
 
-const statusCounts = CLIENTE_STATUS_LIST.reduce(
-  (acc, status) => {
-    acc[status] = clientes.filter((c) => c.status === status).length;
+// Estatus activos para los filtros superiores (excluyendo Finalizado)
+const activeStatuses =
+  estatusList.length > 0
+    ? estatusList.filter(
+        (e) => e.codigo !== 'finalizado' && e.nombre.toLowerCase() !== 'finalizado'
+      )
+    : CLIENTE_STATUS_LIST.map((name) => ({
+        id: 0,
+        nombre: name,
+        codigo: name,
+        color: '#ff0000',
+      }));
+
+// Todos los estatus disponibles para el modal (incluyendo Finalizado y nuevos estatus)
+const allModalStatuses =
+  estatusList.length > 0
+    ? estatusList
+    : ALL_CLIENTE_STATUS_LIST.map((name) => ({
+        id: 0,
+        nombre: name,
+        codigo: name,
+        color: '#1e3a8a',
+      }));
+
+// Diccionario de colores por nombre de estatus
+const estatusColorMap: Record<string, string> = {};
+estatusList.forEach((e) => {
+  estatusColorMap[e.nombre] = e.color;
+});
+
+const statusCounts = activeStatuses.reduce(
+  (acc, item) => {
+    acc[item.nombre] = clientes.filter((c) => c.status === item.nombre).length;
     return acc;
   },
-  {} as Record<ClienteStatus, number>
+  {} as Record<string, number>
 );
 ---
 
-<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-  <!-- Tarjetas / Píldoras de los 10 Estatus con Colores de la Página 1 -->
+<section
+  id="hero-pendientes-container"
+  data-contactos={JSON.stringify(contactosList)}
+  class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
+>
+  <!-- Tarjetas / Píldoras de los Estatus de Pendientes -->
   <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <h2 class="text-sm font-bold uppercase tracking-wider text-primary">
-        Filtrar por Estatus Operativo (10 Estatus Unificados)
-      </h2>
-      <button
-        type="button"
-        id="btn-reset-status"
-        class="text-xs font-semibold text-secondary hover:underline cursor-pointer"
-      >
-        Ver todos los registros (<span id="reset-total-count">{clientes.length}</span>)
-      </button>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
       {
-        CLIENTE_STATUS_LIST.map((statusKey) => {
-          const cfg = STATUS_CONFIGS[statusKey];
-          const count = statusCounts[statusKey] ?? 0;
+        activeStatuses.map((st) => {
+          const cfg = STATUS_CONFIGS[st.nombre as keyof typeof STATUS_CONFIGS];
+          const color = st.color || '#1e3a8a';
+          const count = statusCounts[st.nombre] ?? 0;
           return (
             <button
               type="button"
-              data-status-pill={statusKey}
-              title={cfg.shortDescription}
-              class={`status-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition hover:shadow-sm cursor-pointer ${cfg.badgeClass}`}
+              data-status-pill={st.nombre}
+              title={`Filtrar por ${st.nombre}`}
+              class={`status-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition hover:shadow-sm cursor-pointer ${
+                cfg?.badgeClass || ''
+              }`}
+              style={`background-color: ${color}14; border-color: ${color}55; color: ${color};`}
             >
               <div class="flex items-center gap-2 min-w-0">
-                <span class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`} />
-                <span class="text-xs font-bold truncate">{cfg.label}</span>
+                <span
+                  class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg?.dotClass || ''}`}
+                  style={`background-color: ${color}; ring-color: ${color}40;`}
+                />
+                <span class="text-xs font-bold truncate">{st.nombre}</span>
               </div>
               <span
-                data-status-count={statusKey}
-                class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2 py-0.5 text-xs font-extrabold shrink-0"
+                data-status-count={st.nombre}
+                class="inline-flex items-center justify-center rounded-md bg-base/90 text-primary px-2 py-0.5 text-xs font-extrabold shrink-0 border border-base-border"
               >
                 {count}
               </span>
@@ -63,42 +93,18 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
     </div>
   </div>
 
-  <!-- Barra de búsqueda y controles del Grid -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-    <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
-      <div class="relative flex-1 max-w-md">
-        <input
-          type="search"
-          id="input-search-clientes"
-          placeholder="Buscar por cliente, teléfono, código PNR, vuelo, observación o precio..."
-          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
-        />
-      </div>
-
-      <div class="flex items-center gap-2">
-        <label for="select-filter-status" class="text-xs font-bold text-primary whitespace-nowrap">
-          Estatus:
-        </label>
-        <select
-          id="select-filter-status"
-          class="rounded-lg border border-base-border bg-base-muted px-3 py-2 text-sm font-medium text-primary focus:border-primary focus:bg-base focus:outline-none"
-        >
-          <option value="ALL">Todos los estatus ({clientes.length})</option>
-          {
-            CLIENTE_STATUS_LIST.map((statusKey) => (
-              <option value={statusKey}>
-                {STATUS_CONFIGS[statusKey].label}
-              </option>
-            ))
-          }
-        </select>
-      </div>
+  <!-- Barra de búsqueda por nombre y contador de registros -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        id="input-search-clientes"
+        placeholder="Buscar por nombre..."
+        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+      />
     </div>
 
-    <div class="flex items-center justify-between md:justify-end gap-3 text-xs font-semibold text-primary">
-      <span class="text-primary/70 hidden sm:inline">
-        Haz clic en cualquier fila para ver y editar el expediente completo
-      </span>
+    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
       <span id="visible-rows-counter">
         Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
       </span>
@@ -108,6 +114,14 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
       >
         Guardado en D1
       </span>
+      <button
+        type="button"
+        id="btn-open-new-modal"
+        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
+      >
+        <span>+</span>
+        <span>Nuevo Pendiente</span>
+      </button>
     </div>
   </div>
 
@@ -121,7 +135,7 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
     >
       <table class="clientes-table text-left text-sm">
         <caption id="clientes-table-caption" class="sr-only">
-          Tabla unificada de clientes de Global Travel CW almacenada en Cloudflare D1
+          Tabla unificada de pendientes de Global Travel CW almacenada en Cloudflare D1
         </caption>
         <thead class="bg-primary text-base text-xs uppercase tracking-wider">
           <tr>
@@ -137,10 +151,10 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
             <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[240px]">
               {GRID_COLUMNS.solicitud_vuelo}
             </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[280px]">
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[300px]">
               {GRID_COLUMNS.observacion}
             </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[120px]">
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[130px]">
               {GRID_COLUMNS.monto}
             </th>
           </tr>
@@ -148,7 +162,8 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
         <tbody id="clientes-tbody" class="divide-y divide-base-border">
           {
             clientes.map((cliente) => {
-              const cfg = STATUS_CONFIGS[cliente.status] ?? STATUS_CONFIGS['Pendiente Cotizacion'];
+              const cfg = STATUS_CONFIGS[cliente.status as keyof typeof STATUS_CONFIGS];
+              const statusColor = cliente.status_color || estatusColorMap[cliente.status] || '#1e3a8a';
               return (
                 <tr
                   tabindex="0"
@@ -156,6 +171,7 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
                   aria-label={`Abrir detalle completo de ${cliente.contacto}`}
                   data-row-id={cliente.id}
                   data-row-status={cliente.status}
+                  data-row-name={cliente.contacto}
                   data-row-record={JSON.stringify(cliente)}
                   class="hover:bg-base-muted focus:bg-base-muted focus:outline-none transition-colors cursor-pointer"
                 >
@@ -170,11 +186,15 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
                   <td class="py-3.5 px-4 align-middle">
                     <span
                       data-badge-for={cliente.id}
-                      class={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`}
+                      class={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${
+                        cfg?.badgeClass || ''
+                      }`}
+                      style={`background-color: ${statusColor}18; color: ${statusColor}; border-color: ${statusColor}55;`}
                     >
                       <span
                         data-dot-for={cliente.id}
-                        class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`}
+                        class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg?.dotClass || ''}`}
+                        style={`background-color: ${statusColor}; ring-color: ${statusColor}40;`}
                       />
                       <span data-label-for={cliente.id}>{cliente.status}</span>
                     </span>
@@ -248,26 +268,37 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
       </button>
     </div>
 
-    <!-- Cuerpo del Formulario con TODA la información (incluyendo columnas ocultas de la tabla principal) -->
+    <!-- Cuerpo del Formulario -->
     <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
       <input type="hidden" id="field-id" name="id" value="" />
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="sm:col-span-2">
+        <!-- Siempre: Cliente con Autocompletado de Contactos -->
+        <div id="container-contacto" class="sm:col-span-2 relative">
           <label for="field-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
             Cliente (Nombre / Teléfono) *
           </label>
-          <input
-            type="text"
-            id="field-contacto"
-            name="contacto"
-            required
-            placeholder="Ej. Jaime Goenaga Pax | +599 9 600 0000"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
-          />
+          <div class="relative">
+            <input
+              type="text"
+              id="field-contacto"
+              name="contacto"
+              required
+              autocomplete="off"
+              placeholder="Ej. Jaime Goenaga Pax | +599 9 600 0000"
+              class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+            />
+            <!-- Lista de Sugerencias de Contactos -->
+            <ul
+              id="contacto-suggestions"
+              class="hidden absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-lg border border-base-border bg-base shadow-xl divide-y divide-base-border text-xs"
+            >
+            </ul>
+          </div>
         </div>
 
-        <div>
+        <!-- Siempre: Estatus -->
+        <div id="container-status">
           <label for="field-status" class="block text-xs font-bold uppercase text-primary mb-1">
             Estatus *
           </label>
@@ -278,14 +309,15 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
             class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
           >
             {
-              CLIENTE_STATUS_LIST.map((st) => (
-                <option value={st}>{STATUS_CONFIGS[st].label}</option>
+              allModalStatuses.map((st) => (
+                <option value={st.nombre}>{st.nombre}</option>
               ))
             }
           </select>
         </div>
 
-        <div>
+        <!-- Siempre: Fecha -->
+        <div id="container-fecha">
           <label for="field-fecha" class="block text-xs font-bold uppercase text-primary mb-1">
             Fecha (Gestión / Reserva / Factura)
           </label>
@@ -293,12 +325,13 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
             type="text"
             id="field-fecha"
             name="fecha_gestion"
-            placeholder="Ej. 23/10/26"
+            placeholder="DD/MM/AA"
             class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
-        <div class="sm:col-span-2">
+        <!-- Condicional: Datos del Vuelo -->
+        <div id="container-solicitud" class="sm:col-span-2">
           <label for="field-solicitud" class="block text-xs font-bold uppercase text-primary mb-1">
             Datos del Vuelo (Solicitud / Ruta / Fechas de Vuelo)
           </label>
@@ -311,33 +344,8 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
           />
         </div>
 
-        <div>
-          <label for="field-codigo" class="block text-xs font-bold uppercase text-primary mb-1">
-            Código / Localizador PNR / Nº Factura
-          </label>
-          <input
-            type="text"
-            id="field-codigo"
-            name="codigo"
-            placeholder="Ej. Avior | *ZYITWU o GVT-008"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-mono text-primary focus:border-primary focus:bg-base focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label for="field-checkin" class="block text-xs font-bold uppercase text-primary mb-1">
-            Estado de Check-in
-          </label>
-          <input
-            type="text"
-            id="field-checkin"
-            name="checkin"
-            placeholder="Ej. Pendiente / Completado / -"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
-          />
-        </div>
-
-        <div>
+        <!-- Condicional: Precio -->
+        <div id="container-monto">
           <label for="field-monto" class="block text-xs font-bold uppercase text-primary mb-1">
             Precio (Monto / Deuda)
           </label>
@@ -350,20 +358,66 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
           />
         </div>
 
-        <div>
-          <label for="field-origen" class="block text-xs font-bold uppercase text-primary mb-1">
-            Lista de Origen (Reporte Semanal)
+        <!-- Condicional: Aerolínea -->
+        <div id="container-aerolinea">
+          <label for="field-aerolinea" class="block text-xs font-bold uppercase text-primary mb-1">
+            Aerolínea
           </label>
           <input
             type="text"
-            id="field-origen"
-            name="origen_tabla"
-            placeholder="Ej. Cotizaciones, Reserva 24 hrs..."
+            id="field-aerolinea"
+            name="aerolinea"
+            placeholder="Ej. Avior, Avianca, CopaAirlines, ZAir..."
             class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
-        <div class="sm:col-span-2">
+        <!-- Condicional: Localizador -->
+        <div id="container-localizador">
+          <label for="field-localizador" class="block text-xs font-bold uppercase text-primary mb-1">
+            Localizador (PNR)
+          </label>
+          <input
+            type="text"
+            id="field-localizador"
+            name="localizador"
+            placeholder="Ej. *ZYITWU, BSHDA4, AVORPC..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-mono text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Condicional: Apellidos -->
+        <div id="container-apellidos">
+          <label for="field-apellidos" class="block text-xs font-bold uppercase text-primary mb-1">
+            Apellidos
+          </label>
+          <input
+            type="text"
+            id="field-apellidos"
+            name="apellidos"
+            placeholder="Ej. OTANEZ RUSSIAN, Carabali Mestizo..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Condicional: Estado de Check-in -->
+        <div id="container-checkin">
+          <label for="field-checkin" class="block text-xs font-bold uppercase text-primary mb-1">
+            Estado de Check-in
+          </label>
+          <select
+            id="field-checkin"
+            name="checkin"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="-">-</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Completado">Completado</option>
+          </select>
+        </div>
+
+        <!-- Siempre: Observación -->
+        <div id="container-observacion" class="sm:col-span-2">
           <label for="field-observacion" class="block text-xs font-bold uppercase text-primary mb-1">
             Observación (Respuesta / Seguimiento / Acuerdo de Pago)
           </label>
@@ -410,13 +464,198 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
   </form>
 </dialog>
 
+<!-- Modal Rápido para Crear / Completar Contacto cuando no existe en la lista -->
+<dialog
+  id="modal-quick-contacto"
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-lg w-[92vw] border-2 border-primary overflow-hidden"
+  aria-labelledby="modal-quick-contacto-title"
+>
+  <form id="form-quick-contacto" class="flex flex-col">
+    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+      <div>
+        <h3 id="modal-quick-contacto-title" class="text-base sm:text-lg font-extrabold flex items-center gap-2">
+          <span>👤</span>
+          <span>Nuevo Cliente Detectado</span>
+        </h3>
+        <p class="text-xs text-base-muted/90 mt-0.5">
+          Este cliente no existe en Contactos. Completa su ficha para registrarlo.
+        </p>
+      </div>
+      <button
+        type="button"
+        id="btn-close-modal-quick-contacto"
+        class="rounded-lg bg-base/10 hover:bg-base/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="p-6 space-y-3.5 text-sm max-h-[70vh] overflow-y-auto">
+      <div>
+        <label for="quick-f-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
+          Cliente / Nombre en el Pendiente *
+        </label>
+        <input
+          type="text"
+          id="quick-f-contacto"
+          name="contacto"
+          required
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label for="quick-f-telefono" class="block text-xs font-bold uppercase text-primary mb-1">
+            Teléfono
+          </label>
+          <input
+            type="text"
+            id="quick-f-telefono"
+            name="telefono"
+            placeholder="+599 9 520 1234"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary font-mono focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-email" class="block text-xs font-bold uppercase text-primary mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            id="quick-f-email"
+            name="email"
+            placeholder="cliente@ejemplo.com"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-nombres" class="block text-xs font-bold uppercase text-primary mb-1">
+            Nombres
+          </label>
+          <input
+            type="text"
+            id="quick-f-nombres"
+            name="nombres"
+            placeholder="Nombres"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-apellidos" class="block text-xs font-bold uppercase text-primary mb-1">
+            Apellidos
+          </label>
+          <input
+            type="text"
+            id="quick-f-apellidos"
+            name="apellidos"
+            placeholder="Apellidos"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-nacimiento" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha Nacimiento
+          </label>
+          <input
+            type="text"
+            id="quick-f-nacimiento"
+            name="fecha_nacimiento"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-genero" class="block text-xs font-bold uppercase text-primary mb-1">
+            Género
+          </label>
+          <select
+            id="quick-f-genero"
+            name="genero"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary font-medium focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="-">-</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Femenino">Femenino</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="quick-f-pasaporte" class="block text-xs font-bold uppercase text-primary mb-1">
+            Número de Pasaporte
+          </label>
+          <input
+            type="text"
+            id="quick-f-pasaporte"
+            name="numero_pasaporte"
+            placeholder="Ej. PA123456"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 font-mono font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label for="quick-f-nacionalidad" class="block text-xs font-bold uppercase text-primary mb-1">
+            Nacionalidad Pasaporte
+          </label>
+          <input
+            type="text"
+            id="quick-f-nacionalidad"
+            name="nacionalidad_pasaporte"
+            placeholder="Nacionalidad"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+      <button
+        type="button"
+        id="btn-skip-quick-contacto"
+        class="text-xs text-primary/70 hover:text-primary underline cursor-pointer"
+      >
+        Omitir y guardar solo pendiente
+      </button>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          id="btn-cancel-quick-contacto"
+          class="rounded-lg border border-base-border bg-base px-3.5 py-1.5 text-xs font-semibold text-primary hover:bg-base-muted cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          id="btn-submit-quick-contacto"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-1.5 text-xs shadow-xs transition cursor-pointer"
+        >
+          Guardar Contacto y Pendiente
+        </button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
 <script>
   import { STATUS_CONFIGS } from '@/constants/statuses';
-  import type { ClienteRecord, ClienteStatus } from '@/types';
+  import type { ClienteRecord, ContactoRecord } from '@/types';
+  import { parseContactoInitial } from '@/utils/pagoHelpers';
+
+  const heroContainer = document.querySelector<HTMLElement>('#hero-pendientes-container');
+  let contactosList: ContactoRecord[] = [];
+  try {
+    contactosList = JSON.parse(heroContainer?.dataset.contactos || '[]');
+  } catch {}
 
   const searchInput = document.querySelector<HTMLInputElement>('#input-search-clientes');
-  const statusSelect = document.querySelector<HTMLSelectElement>('#select-filter-status');
   const resetBtn = document.querySelector<HTMLButtonElement>('#btn-reset-status');
+  let selectedStatus = 'ALL';
   const tbody = document.querySelector<HTMLTableSectionElement>('#clientes-tbody');
   const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
   const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
@@ -433,18 +672,142 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
 
   const fId = document.querySelector<HTMLInputElement>('#field-id');
   const fContacto = document.querySelector<HTMLInputElement>('#field-contacto');
+  const suggestionsBox = document.querySelector<HTMLUListElement>('#contacto-suggestions');
   const fStatus = document.querySelector<HTMLSelectElement>('#field-status');
-  const fCodigo = document.querySelector<HTMLInputElement>('#field-codigo');
   const fFecha = document.querySelector<HTMLInputElement>('#field-fecha');
   const fSolicitud = document.querySelector<HTMLInputElement>('#field-solicitud');
   const fMonto = document.querySelector<HTMLInputElement>('#field-monto');
-  const fCheckin = document.querySelector<HTMLInputElement>('#field-checkin');
-  const fOrigen = document.querySelector<HTMLInputElement>('#field-origen');
+  const fAerolinea = document.querySelector<HTMLInputElement>('#field-aerolinea');
+  const fLocalizador = document.querySelector<HTMLInputElement>('#field-localizador');
+  const fApellidos = document.querySelector<HTMLInputElement>('#field-apellidos');
+  const fCheckin = document.querySelector<HTMLSelectElement>('#field-checkin');
   const fObservacion = document.querySelector<HTMLTextAreaElement>('#field-observacion');
 
-  function showSyncToast(text = 'Guardado en Cloudflare D1') {
+  // Modal Rápido de Contacto
+  const modalQuickContacto = document.querySelector<HTMLDialogElement>('#modal-quick-contacto');
+  const formQuickContacto = document.querySelector<HTMLFormElement>('#form-quick-contacto');
+  const btnCloseModalQuickContacto = document.querySelector<HTMLButtonElement>('#btn-close-modal-quick-contacto');
+  const btnCancelQuickContacto = document.querySelector<HTMLButtonElement>('#btn-cancel-quick-contacto');
+  const btnSkipQuickContacto = document.querySelector<HTMLButtonElement>('#btn-skip-quick-contacto');
+  const btnSubmitQuickContacto = document.querySelector<HTMLButtonElement>('#btn-submit-quick-contacto');
+
+  const quickFContacto = document.querySelector<HTMLInputElement>('#quick-f-contacto');
+  const quickFTelefono = document.querySelector<HTMLInputElement>('#quick-f-telefono');
+  const quickFEmail = document.querySelector<HTMLInputElement>('#quick-f-email');
+  const quickFNombres = document.querySelector<HTMLInputElement>('#quick-f-nombres');
+  const quickFApellidos = document.querySelector<HTMLInputElement>('#quick-f-apellidos');
+  const quickFNacimiento = document.querySelector<HTMLInputElement>('#quick-f-nacimiento');
+  const quickFGenero = document.querySelector<HTMLSelectElement>('#quick-f-genero');
+  const quickFPasaporte = document.querySelector<HTMLInputElement>('#quick-f-pasaporte');
+  const quickFNacionalidad = document.querySelector<HTMLInputElement>('#quick-f-nacionalidad');
+
+  const cSolicitud = document.querySelector<HTMLElement>('#container-solicitud');
+  const cMonto = document.querySelector<HTMLElement>('#container-monto');
+  const cAerolinea = document.querySelector<HTMLElement>('#container-aerolinea');
+  const cLocalizador = document.querySelector<HTMLElement>('#container-localizador');
+  const cApellidos = document.querySelector<HTMLElement>('#container-apellidos');
+  const cCheckin = document.querySelector<HTMLElement>('#container-checkin');
+
+  const KNOWN_AIRLINES = [
+    'dividivi',
+    'latam',
+    'avior',
+    'wingo',
+    'zair',
+    'aeroparaguana',
+    'avianca',
+    'arajet',
+    'copaairlines',
+    'copa',
+    'klm',
+    'redair',
+    'laser',
+  ];
+
+  function parseCodigo(codigo: string, record?: Partial<ClienteRecord>) {
+    if (record?.aerolinea || record?.localizador || record?.apellidos) {
+      return {
+        aerolinea: record.aerolinea !== '-' ? (record.aerolinea ?? '') : '',
+        localizador: record.localizador !== '-' ? (record.localizador ?? '') : '',
+        apellidos: record.apellidos !== '-' ? (record.apellidos ?? '') : '',
+      };
+    }
+
+    if (!codigo || codigo === '-') {
+      return { aerolinea: '', localizador: '', apellidos: '' };
+    }
+
+    let partA = codigo;
+    let apellidos = '';
+    if (codigo.includes('/')) {
+      const slashIdx = codigo.indexOf('/');
+      partA = codigo.slice(0, slashIdx).trim();
+      apellidos = codigo.slice(slashIdx + 1).trim();
+    }
+
+    let aerolinea = '';
+    let localizador = '';
+    if (partA.includes('|')) {
+      const pipeParts = partA.split('|').map((s) => s.trim());
+      aerolinea = pipeParts[0] || '';
+      localizador = pipeParts.slice(1).join(' | ');
+    } else {
+      const trimmed = partA.trim();
+      if (KNOWN_AIRLINES.includes(trimmed.toLowerCase())) {
+        aerolinea = trimmed;
+      } else {
+        localizador = trimmed;
+      }
+    }
+
+    return { aerolinea, localizador, apellidos };
+  }
+
+  function toggleContainer(el: HTMLElement | null, show: boolean) {
+    if (!el) return;
+    if (show) {
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  }
+
+  function updateModalFieldVisibility() {
+    const currentStatus = fStatus?.value ?? '';
+
+    const hasVuelo = [
+      'Pendiente Cotizacion',
+      'Cotizacion Enviada',
+      'Reserva por 24h',
+      'Reserva Emitida',
+    ].includes(currentStatus);
+
+    const hasPrecio = [
+      'Cotizacion Enviada',
+      'Reserva por 24h',
+      'Reserva Emitida',
+    ].includes(currentStatus);
+
+    const hasReservaFields = [
+      'Reserva por 24h',
+      'Reserva Emitida',
+    ].includes(currentStatus);
+
+    const hasCheckin = currentStatus === 'Reserva Emitida';
+
+    toggleContainer(cSolicitud, hasVuelo);
+    toggleContainer(cMonto, hasPrecio);
+    toggleContainer(cAerolinea, hasReservaFields);
+    toggleContainer(cLocalizador, hasReservaFields);
+    toggleContainer(cApellidos, hasReservaFields);
+    toggleContainer(cCheckin, hasCheckin);
+  }
+
+  fStatus?.addEventListener('change', updateModalFieldVisibility);
+
+  function showSyncToast(message: string) {
     if (!syncToast) return;
-    syncToast.textContent = text;
+    syncToast.textContent = message;
     syncToast.classList.remove('hidden');
     window.setTimeout(() => {
       syncToast.classList.add('hidden');
@@ -454,15 +817,14 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
   function applyFilters() {
     if (!tbody) return;
     const query = (searchInput?.value ?? '').toLowerCase().trim();
-    const selectedStatus = statusSelect?.value ?? 'ALL';
     const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
 
     let visibleCount = 0;
     for (const row of rows) {
       const rowStatus = row.dataset.rowStatus ?? '';
-      const rowRecordStr = (row.dataset.rowRecord ?? '').toLowerCase();
+      const rowName = (row.dataset.rowName ?? '').toLowerCase();
       const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
-      const matchesQuery = !query || rowRecordStr.includes(query);
+      const matchesQuery = !query || rowName.includes(query);
 
       if (matchesStatus && matchesQuery) {
         row.style.display = '';
@@ -502,9 +864,6 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
 
     const headerTotal = document.getElementById('header-total-count');
     if (headerTotal) headerTotal.textContent = String(rows.length);
-
-    const resetTotal = document.getElementById('reset-total-count');
-    if (resetTotal) resetTotal.textContent = String(rows.length);
   }
 
   function openClientModal(record: ClienteRecord) {
@@ -514,7 +873,7 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
       modalTitle.textContent = `Expediente de Cliente #${record.id}`;
     }
     if (modalSubtitle) {
-      modalSubtitle.textContent = `Origen: ${record.origen_tabla} · Última act. D1: ${record.updated_at || 'Reciente'}`;
+      modalSubtitle.textContent = `Última act. D1: ${record.updated_at || 'Reciente'}`;
     }
 
     if (fId) fId.value = String(record.id);
@@ -522,11 +881,20 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
     if (fStatus) fStatus.value = record.status;
     if (fFecha) fFecha.value = record.fecha_gestion === '-' ? '' : record.fecha_gestion;
     if (fSolicitud) fSolicitud.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
-    if (fCodigo) fCodigo.value = record.codigo === '-' ? '' : record.codigo;
-    if (fCheckin) fCheckin.value = record.checkin === '-' ? '' : record.checkin;
     if (fMonto) fMonto.value = record.monto === '-' ? '' : record.monto;
-    if (fOrigen) fOrigen.value = record.origen_tabla === '-' ? '' : record.origen_tabla;
+
+    const parsed = parseCodigo(record.codigo, record);
+    if (fAerolinea) fAerolinea.value = parsed.aerolinea;
+    if (fLocalizador) fLocalizador.value = parsed.localizador;
+    if (fApellidos) fApellidos.value = parsed.apellidos;
+
+    if (fCheckin) {
+      const cVal = (record.checkin ?? '').trim();
+      fCheckin.value = (cVal === 'Pendiente' || cVal === 'Completado') ? cVal : '-';
+    }
     if (fObservacion) fObservacion.value = record.observacion === '-' ? '' : record.observacion;
+
+    updateModalFieldVisibility();
 
     if (btnDeleteModal) btnDeleteModal.classList.remove('hidden');
     if (btnSubmitModal) btnSubmitModal.textContent = 'Guardar Cambios';
@@ -536,10 +904,9 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
 
   // Eventos de filtrado
   searchInput?.addEventListener('input', applyFilters);
-  statusSelect?.addEventListener('change', applyFilters);
 
   resetBtn?.addEventListener('click', () => {
-    if (statusSelect) statusSelect.value = 'ALL';
+    selectedStatus = 'ALL';
     if (searchInput) searchInput.value = '';
     applyFilters();
   });
@@ -547,13 +914,12 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
   document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
     pill.addEventListener('click', () => {
       const targetStatus = pill.dataset.statusPill ?? 'ALL';
-      if (!statusSelect) return;
-      statusSelect.value = statusSelect.value === targetStatus ? 'ALL' : targetStatus;
+      selectedStatus = selectedStatus === targetStatus ? 'ALL' : targetStatus;
       applyFilters();
     });
   });
 
-  // Clic o Enter sobre cualquier fila de la tabla -> abre la ventana con TODA la información editable
+  // Clic o Enter sobre cualquier fila de la tabla -> abre el modal
   tbody?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
@@ -574,16 +940,106 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
     openClientModal(record);
   });
 
-  // Abrir modal para Nuevo Cliente
+  function getTodayFormatted(): string {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = String(today.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
+
+  function renderSuggestions(query: string) {
+    if (!suggestionsBox) return;
+    const q = query.toLowerCase().trim();
+    if (!q) {
+      suggestionsBox.classList.add('hidden');
+      suggestionsBox.innerHTML = '';
+      return;
+    }
+
+    const matches = contactosList
+      .filter((c) => {
+        const full = `${c.contacto} ${c.telefono} ${c.nombres} ${c.apellidos}`.toLowerCase();
+        return full.includes(q);
+      })
+      .slice(0, 8);
+
+    if (matches.length === 0) {
+      suggestionsBox.classList.add('hidden');
+      suggestionsBox.innerHTML = '';
+      return;
+    }
+
+    suggestionsBox.innerHTML = matches
+      .map((item) => {
+        const details = [];
+        if (item.telefono && item.telefono !== '-') details.push(`📞 ${item.telefono}`);
+        if (item.numero_pasaporte && item.numero_pasaporte !== '-') details.push(`🛂 ${item.numero_pasaporte}`);
+        return `
+          <li
+            data-suggestion="${encodeURIComponent(JSON.stringify(item))}"
+            class="px-3.5 py-2 hover:bg-base-muted cursor-pointer transition flex items-center justify-between gap-2"
+          >
+            <div class="min-w-0">
+              <span class="font-bold text-primary truncate block">${item.contacto}</span>
+              ${details.length > 0 ? `<span class="text-[11px] text-primary/70">${details.join(' · ')}</span>` : ''}
+            </div>
+            <span class="text-[10px] uppercase font-bold text-primary/60 bg-base px-1.5 py-0.5 rounded border border-base-border shrink-0">Elegir</span>
+          </li>
+        `;
+      })
+      .join('');
+
+    suggestionsBox.classList.remove('hidden');
+  }
+
+  fContacto?.addEventListener('input', () => {
+    renderSuggestions(fContacto.value);
+  });
+
+  suggestionsBox?.addEventListener('click', (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLLIElement>('li[data-suggestion]');
+    if (!li || !li.dataset.suggestion) return;
+    try {
+      const item = JSON.parse(decodeURIComponent(li.dataset.suggestion)) as ContactoRecord;
+      if (fContacto) fContacto.value = item.contacto;
+      if (
+        fApellidos &&
+        (!fApellidos.value || fApellidos.value === '-') &&
+        item.apellidos &&
+        item.apellidos !== '-'
+      ) {
+        fApellidos.value = item.apellidos;
+      }
+    } catch {}
+    suggestionsBox.classList.add('hidden');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!fContacto?.contains(e.target as Node) && !suggestionsBox?.contains(e.target as Node)) {
+      suggestionsBox?.classList.add('hidden');
+    }
+  });
+
   btnOpenNew?.addEventListener('click', () => {
     if (!modal || !form) return;
     form.reset();
     if (fId) fId.value = '';
-    if (modalTitle) modalTitle.textContent = 'Nuevo Registro de Cliente';
+    if (fFecha) fFecha.value = getTodayFormatted();
+    if (fCheckin) fCheckin.value = '-';
+    if (fAerolinea) fAerolinea.value = '';
+    if (fLocalizador) fLocalizador.value = '';
+    if (fApellidos) fApellidos.value = '';
+    if (fStatus && fStatus.options.length > 0) {
+      fStatus.selectedIndex = 0;
+    }
+    updateModalFieldVisibility();
+    if (modalTitle) modalTitle.textContent = 'Nuevo Pendiente';
     if (modalSubtitle) modalSubtitle.textContent = 'Ingresa los datos para registrar en Cloudflare D1';
     if (btnDeleteModal) btnDeleteModal.classList.add('hidden');
-    if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Cliente';
+    if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Pendiente';
     modal.showModal();
+    fContacto?.focus();
   });
 
   btnCloseModal?.addEventListener('click', () => modal?.close());
@@ -615,7 +1071,7 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
 
     btnDeleteModal.disabled = true;
     try {
-      const response = await fetch(`/api/clientes?id=${id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/pendientes?id=${id}`, { method: 'DELETE' });
       if (response.ok) {
         const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
         row?.remove();
@@ -629,30 +1085,36 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
     }
   });
 
-  // Guardar Cambios o Crear Cliente en Cloudflare D1
-  form?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const formData = new FormData(form);
-    const idVal = String(formData.get('id') ?? '').trim();
+  let pendingSavePayload: any = null;
 
-    const payload = {
-      id: idVal ? Number(idVal) : undefined,
-      contacto: String(formData.get('contacto') ?? '').trim(),
-      status: String(formData.get('status') ?? 'Pendiente Cotizacion') as ClienteStatus,
-      codigo: String(formData.get('codigo') ?? '').trim() || '-',
-      fecha_gestion: String(formData.get('fecha_gestion') ?? '').trim() || '-',
-      solicitud_vuelo: String(formData.get('solicitud_vuelo') ?? '').trim() || '-',
-      monto: String(formData.get('monto') ?? '').trim() || '-',
-      checkin: String(formData.get('checkin') ?? '').trim() || '-',
-      origen_tabla: String(formData.get('origen_tabla') ?? '').trim() || 'Registro Manual',
-      observacion: String(formData.get('observacion') ?? '').trim() || '-',
-    };
+  function openQuickContactoModal(contacto: string, apellidosDefault?: string) {
+    if (!modalQuickContacto || !formQuickContacto) return;
+    formQuickContacto.reset();
 
-    if (btnSubmitModal) btnSubmitModal.disabled = true;
+    if (quickFContacto) quickFContacto.value = contacto;
+    const parsed = parseContactoInitial(contacto);
+    if (quickFTelefono) quickFTelefono.value = parsed.telefono !== '-' ? parsed.telefono : '';
+    if (quickFNombres) quickFNombres.value = parsed.nombres !== '-' ? parsed.nombres : '';
+    if (quickFApellidos) {
+      quickFApellidos.value =
+        apellidosDefault && apellidosDefault !== '-'
+          ? apellidosDefault
+          : (parsed.apellidos !== '-' ? parsed.apellidos : '');
+    }
+
+    modalQuickContacto.showModal();
+    quickFNombres?.focus();
+  }
+
+  async function executeSavePendiente(payload: any) {
+    if (!btnSubmitModal) return;
+    btnSubmitModal.disabled = true;
+    const originalText = btnSubmitModal.textContent;
+    btnSubmitModal.textContent = 'Guardando...';
 
     try {
-      const method = idVal ? 'PATCH' : 'POST';
-      const response = await fetch('/api/clientes', {
+      const method = payload.id ? 'PATCH' : 'POST';
+      const response = await fetch('/api/pendientes', {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -663,19 +1125,18 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
       if (response.ok && result.ok && result.data) {
         const updated = result.data;
 
-        if (!idVal) {
-          // Nuevo registro: recargar para insertar la fila completa ordenada
+        if (!payload.id) {
           modal?.close();
           window.location.reload();
           return;
         }
 
-        // Actualizar la fila en tiempo real sin perder el filtro actual
         const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
-        const cfg = STATUS_CONFIGS[updated.status] ?? STATUS_CONFIGS['Pendiente Cotizacion'];
+        const cfg = STATUS_CONFIGS[updated.status as keyof typeof STATUS_CONFIGS];
 
         if (row) {
           row.dataset.rowStatus = updated.status;
+          row.dataset.rowName = updated.contacto;
           row.dataset.rowRecord = JSON.stringify(updated);
 
           const cellContacto = row.querySelector<HTMLElement>(`[data-cell-contacto="${updated.id}"]`);
@@ -689,10 +1150,20 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
 
           if (cellContacto) cellContacto.textContent = updated.contacto;
           if (badge) {
-            badge.className = `inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${cfg.badgeClass}`;
+            badge.className = `inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold w-fit ${
+              cfg?.badgeClass || ''
+            }`;
+            if (updated.status_color) {
+              badge.style.backgroundColor = `${updated.status_color}18`;
+              badge.style.color = updated.status_color;
+              badge.style.borderColor = `${updated.status_color}55`;
+            }
           }
           if (dot) {
-            dot.className = `h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dotClass}`;
+            dot.className = `h-2.5 w-2.5 shrink-0 rounded-full ${cfg?.dotClass || ''}`;
+            if (updated.status_color) {
+              dot.style.backgroundColor = updated.status_color;
+            }
           }
           if (label) {
             label.textContent = updated.status;
@@ -714,7 +1185,147 @@ const statusCounts = CLIENTE_STATUS_LIST.reduce(
         showSyncToast(`Cambios guardados en D1 (#${updated.id})`);
       }
     } finally {
-      if (btnSubmitModal) btnSubmitModal.disabled = false;
+      if (btnSubmitModal) {
+        btnSubmitModal.disabled = false;
+        btnSubmitModal.textContent = originalText;
+      }
     }
+  }
+
+  // Eventos Modal Quick Contacto
+  formQuickContacto?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!btnSubmitQuickContacto) return;
+
+    const contactoName = quickFContacto?.value?.trim() || pendingSavePayload?.contacto || '';
+    if (!contactoName) {
+      alert('El nombre del cliente/contacto es obligatorio.');
+      return;
+    }
+
+    const newContactData = {
+      contacto: contactoName,
+      telefono: quickFTelefono?.value?.trim() || '-',
+      email: quickFEmail?.value?.trim() || '-',
+      nombres: quickFNombres?.value?.trim() || '-',
+      apellidos: quickFApellidos?.value?.trim() || '-',
+      fecha_nacimiento: quickFNacimiento?.value?.trim() || '-',
+      genero: quickFGenero?.value || '-',
+      numero_pasaporte: quickFPasaporte?.value?.trim() || '-',
+      nacionalidad_pasaporte: quickFNacionalidad?.value?.trim() || '-',
+      fecha_emision_pasaporte: '-',
+      fecha_vencimiento_pasaporte: '-',
+    };
+
+    btnSubmitQuickContacto.disabled = true;
+    btnSubmitQuickContacto.textContent = 'Guardando contacto...';
+
+    try {
+      const res = await fetch('/api/contactos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContactData),
+      });
+
+      if (res.ok) {
+        const json = (await res.json()) as { ok?: boolean; data?: ContactoRecord };
+        if (json.data) {
+          contactosList.push(json.data);
+        }
+      }
+    } catch {}
+
+    btnSubmitQuickContacto.disabled = false;
+    btnSubmitQuickContacto.textContent = 'Guardar Contacto y Pendiente';
+    modalQuickContacto?.close();
+
+    if (pendingSavePayload) {
+      const p = pendingSavePayload;
+      pendingSavePayload = null;
+      await executeSavePendiente(p);
+    }
+  });
+
+  btnSkipQuickContacto?.addEventListener('click', async () => {
+    modalQuickContacto?.close();
+    if (pendingSavePayload) {
+      const p = pendingSavePayload;
+      pendingSavePayload = null;
+      await executeSavePendiente(p);
+    }
+  });
+
+  btnCancelQuickContacto?.addEventListener('click', () => {
+    modalQuickContacto?.close();
+    pendingSavePayload = null;
+  });
+
+  btnCloseModalQuickContacto?.addEventListener('click', () => {
+    modalQuickContacto?.close();
+    pendingSavePayload = null;
+  });
+
+  // Guardar Cambios o Crear Cliente en Cloudflare D1
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!form || !btnSubmitModal) return;
+
+    const idVal = fId?.value?.trim();
+    const contacto = fContacto?.value?.trim();
+    const status = fStatus?.value?.trim();
+    const fecha = fFecha?.value?.trim() || '-';
+    const solicitud = fSolicitud?.value?.trim() || '-';
+    const monto = fMonto?.value?.trim() || '-';
+    const observacion = fObservacion?.value?.trim() || '-';
+    const aerolinea = fAerolinea?.value?.trim() || '-';
+    const localizador = fLocalizador?.value?.trim() || '-';
+    const apellidos = fApellidos?.value?.trim() || '-';
+    const checkin = fCheckin?.value?.trim() || '-';
+
+    if (!contacto || !status) {
+      alert('Por favor completa los campos obligatorios: Cliente y Estatus.');
+      return;
+    }
+
+    let codigo = '-';
+    const codeParts: string[] = [];
+    if (aerolinea && aerolinea !== '-') codeParts.push(aerolinea);
+    if (localizador && localizador !== '-') codeParts.push(localizador);
+    let baseCode = codeParts.join(' | ');
+
+    if (apellidos && apellidos !== '-') {
+      codigo = baseCode ? `${baseCode} / ${apellidos}` : apellidos;
+    } else if (baseCode) {
+      codigo = baseCode;
+    }
+
+    const payload = {
+      ...(idVal ? { id: Number(idVal) } : {}),
+      contacto,
+      status,
+      fecha_gestion: fecha,
+      solicitud_vuelo: solicitud,
+      monto,
+      observacion,
+      aerolinea,
+      localizador,
+      apellidos,
+      checkin,
+      codigo,
+    };
+
+    // Validar si el contacto ya existe en la lista de contactos
+    const cleanContacto = contacto.trim().toLowerCase();
+    const existsInContactos = contactosList.some(
+      (c) => c.contacto.trim().toLowerCase() === cleanContacto
+    );
+
+    if (!existsInContactos) {
+      pendingSavePayload = payload;
+      openQuickContactoModal(contacto, apellidos);
+      return;
+    }
+
+    await executeSavePendiente(payload);
   });
 </script>

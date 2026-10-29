@@ -1,23 +1,35 @@
-import type { ClienteStatus, StatusConfig } from '@/types';
+import type {
+  PagoStatus,
+  PendienteStatus,
+  StatusConfig,
+} from '@/types';
 
-export const CLIENTE_STATUS_LIST: ClienteStatus[] = [
+// ==========================================
+// 1. PANEL PENDIENTES
+// ==========================================
+
+// Los 7 estatus operativos visibles en la cuadrícula de Pendientes
+export const PENDIENTE_STATUS_LIST: PendienteStatus[] = [
   'Pendiente Cotizacion',
   'Cotizacion Enviada',
   'Reserva por 24h',
   'Reserva Emitida',
-  'Pago Pendiente Factura',
-  'Pago Pendiente Tickete',
-  'Cambio Tickets',
   'Visas',
   'Consultas',
-  'Pagos Demorados(lista negra)',
+  'Cambio Tickets',
 ];
 
-export const STATUS_CONFIGS: Record<ClienteStatus, StatusConfig> = {
+// Todos los estatus seleccionables en el modal de Pendientes (incluyendo Finalizado)
+export const ALL_PENDIENTE_STATUS_LIST: PendienteStatus[] = [
+  ...PENDIENTE_STATUS_LIST,
+  'Finalizado',
+];
+
+export const PENDIENTE_STATUS_CONFIGS: Record<PendienteStatus, StatusConfig> = {
   'Pendiente Cotizacion': {
     id: 'Pendiente Cotizacion',
     order: 1,
-    label: '1. Pendiente Cotizacion',
+    label: 'Pendiente Cotizacion',
     shortDescription: 'Solicitudes en espera de cotización para reservas (Rojo #FF0000)',
     badgeClass:
       'bg-status-cotizacion-bg text-status-cotizacion-text border-status-cotizacion-border',
@@ -27,7 +39,7 @@ export const STATUS_CONFIGS: Record<ClienteStatus, StatusConfig> = {
   'Cotizacion Enviada': {
     id: 'Cotizacion Enviada',
     order: 2,
-    label: '2. Cotizacion Enviada',
+    label: 'Cotizacion Enviada',
     shortDescription: 'Cotización enviada / esperando confirmación (Amarillo #FFC000)',
     badgeClass:
       'bg-status-enviada-bg text-status-enviada-text border-status-enviada-border',
@@ -37,7 +49,7 @@ export const STATUS_CONFIGS: Record<ClienteStatus, StatusConfig> = {
   'Reserva por 24h': {
     id: 'Reserva por 24h',
     order: 3,
-    label: '3. Reserva por 24h',
+    label: 'Reserva por 24h',
     shortDescription: 'Reserva apartado 24hrs (Azul Cielo #00B0F0)',
     badgeClass:
       'bg-status-reserva24-bg text-status-reserva24-text border-status-reserva24-border',
@@ -47,47 +59,17 @@ export const STATUS_CONFIGS: Record<ClienteStatus, StatusConfig> = {
   'Reserva Emitida': {
     id: 'Reserva Emitida',
     order: 4,
-    label: '4. Reserva Emitida',
+    label: 'Reserva Emitida',
     shortDescription: 'Viaje Confirmado / Boleto Emitido (Verde Lima #00FF00)',
     badgeClass:
       'bg-status-emitida-bg text-status-emitida-text border-status-emitida-border',
     dotClass: 'bg-status-emitida-dot ring-1 ring-status-emitida-border',
     cardBorderClass: 'border-l-status-emitida-border',
   },
-  'Pago Pendiente Factura': {
-    id: 'Pago Pendiente Factura',
-    order: 5,
-    label: '5. Pago Pendiente Factura',
-    shortDescription: 'Reserva / Pago Pendiente Factura (Morado #7030A0)',
-    badgeClass:
-      'bg-status-factura-bg text-status-factura-text border-status-factura-border',
-    dotClass: 'bg-status-factura-dot ring-1 ring-status-factura-border',
-    cardBorderClass: 'border-l-status-factura-border',
-  },
-  'Pago Pendiente Tickete': {
-    id: 'Pago Pendiente Tickete',
-    order: 6,
-    label: '6. Pago Pendiente Tickete',
-    shortDescription: 'Boleto emitido / Pago Pendiente Tickete (Azul Acero #2F5496)',
-    badgeClass:
-      'bg-status-tickete-bg text-status-tickete-text border-status-tickete-border',
-    dotClass: 'bg-status-tickete-dot ring-1 ring-status-tickete-border',
-    cardBorderClass: 'border-l-status-tickete-border',
-  },
-  'Cambio Tickets': {
-    id: 'Cambio Tickets',
-    order: 7,
-    label: '7. Cambio Tickets',
-    shortDescription: 'Cambio de Tickets / Reprogramaciones (Fucsia #FF0066)',
-    badgeClass:
-      'bg-status-cambio-bg text-status-cambio-text border-status-cambio-border',
-    dotClass: 'bg-status-cambio-dot ring-1 ring-status-cambio-border',
-    cardBorderClass: 'border-l-status-cambio-border',
-  },
   Visas: {
     id: 'Visas',
-    order: 8,
-    label: '8. Visas',
+    order: 5,
+    label: 'Visas',
     shortDescription: 'Visas en gestión (Magenta / Ciruela #CC3399)',
     badgeClass:
       'bg-status-visas-bg text-status-visas-text border-status-visas-border',
@@ -96,22 +78,87 @@ export const STATUS_CONFIGS: Record<ClienteStatus, StatusConfig> = {
   },
   Consultas: {
     id: 'Consultas',
-    order: 9,
-    label: '9. Consultas',
+    order: 6,
+    label: 'Consultas',
     shortDescription: 'Consultas y orientaciones generales (Verde Oliva #669900)',
     badgeClass:
       'bg-status-consultas-bg text-status-consultas-text border-status-consultas-border',
     dotClass: 'bg-status-consultas-dot ring-1 ring-status-consultas-border',
     cardBorderClass: 'border-l-status-consultas-border',
   },
-  'Pagos Demorados(lista negra)': {
-    id: 'Pagos Demorados(lista negra)',
-    order: 10,
-    label: '10. Pagos Demorados(lista negra)',
-    shortDescription: 'Pendiente Pagos Viejos / Cobranza acumulada (Gris #A5A5A5)',
+  'Cambio Tickets': {
+    id: 'Cambio Tickets',
+    order: 7,
+    label: 'Cambio Tickets',
+    shortDescription: 'Cambio de Tickets / Reprogramaciones (Fucsia #FF0066)',
     badgeClass:
-      'bg-status-listanegra-bg text-status-listanegra-text border-status-listanegra-border',
-    dotClass: 'bg-status-listanegra-dot ring-1 ring-status-listanegra-border',
-    cardBorderClass: 'border-l-status-listanegra-border',
+      'bg-status-cambio-bg text-status-cambio-text border-status-cambio-border',
+    dotClass: 'bg-status-cambio-dot ring-1 ring-status-cambio-border',
+    cardBorderClass: 'border-l-status-cambio-border',
+  },
+  Finalizado: {
+    id: 'Finalizado',
+    order: 8,
+    label: 'Finalizado',
+    shortDescription: 'Gestión completada y finalizada',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    dotClass: 'bg-emerald-600 ring-1 ring-emerald-400',
+    cardBorderClass: 'border-l-emerald-600',
+  },
+};
+
+// Aliases para compatibilidad con código existente
+export const CLIENTE_STATUS_LIST = PENDIENTE_STATUS_LIST;
+export const ALL_CLIENTE_STATUS_LIST = ALL_PENDIENTE_STATUS_LIST;
+export const STATUS_CONFIGS = PENDIENTE_STATUS_CONFIGS;
+
+// ==========================================
+// 2. PANEL PAGOS
+// ==========================================
+
+// Los 4 estatus de Pagos
+export const PAGO_STATUS_LIST: PagoStatus[] = [
+  'Pendiente',
+  'Abono',
+  'Demorados',
+  'Pagado',
+];
+
+export const PAGO_STATUS_CONFIGS: Record<PagoStatus, StatusConfig> = {
+  Pendiente: {
+    id: 'Pendiente',
+    order: 1,
+    label: 'Pendiente',
+    shortDescription: 'Pagos pendientes (Unión de Facturas y Ticketes)',
+    badgeClass: 'bg-purple-50 text-purple-800 border-purple-300',
+    dotClass: 'bg-purple-600 ring-1 ring-purple-400',
+    cardBorderClass: 'border-l-purple-600',
+  },
+  Abono: {
+    id: 'Abono',
+    order: 2,
+    label: 'Abono',
+    shortDescription: 'Abonos y pagos parciales registrados',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+    dotClass: 'bg-amber-500 ring-1 ring-amber-400',
+    cardBorderClass: 'border-l-amber-500',
+  },
+  Demorados: {
+    id: 'Demorados',
+    order: 3,
+    label: 'Demorados',
+    shortDescription: 'Cobranza atrasada / pagos demorados',
+    badgeClass: 'bg-rose-50 text-rose-800 border-rose-300',
+    dotClass: 'bg-rose-500 ring-1 ring-rose-400',
+    cardBorderClass: 'border-l-rose-500',
+  },
+  Pagado: {
+    id: 'Pagado',
+    order: 4,
+    label: 'Pagado',
+    shortDescription: 'Cuenta saldada en su totalidad',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    dotClass: 'bg-emerald-600 ring-1 ring-emerald-400',
+    cardBorderClass: 'border-l-emerald-600',
   },
 };

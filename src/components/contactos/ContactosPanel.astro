@@ -1,0 +1,793 @@
+---
+import { CONTACTOS_GRID_COLUMNS } from '@/constants/site';
+import type { ContactoRecord } from '@/types';
+
+interface Props {
+  contactos: ContactoRecord[];
+}
+
+const { contactos } = Astro.props;
+
+const totalContactos = contactos.length;
+const conTelefono = contactos.filter((c) => c.telefono && c.telefono !== '-').length;
+const conPasaporte = contactos.filter((c) => c.numero_pasaporte && c.numero_pasaporte !== '-').length;
+const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
+---
+
+<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <!-- Píldoras de Análisis y Filtros Rápidos -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      <!-- Todos -->
+      <button
+        type="button"
+        data-filter-pill="ALL"
+        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-blue-50 border-blue-200 text-blue-900 ring-2 ring-primary scale-[1.02]"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600"></span>
+          <span class="text-xs font-bold truncate">Todos los Contactos</span>
+        </div>
+        <span
+          id="stat-total"
+          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+        >
+          {totalContactos}
+        </span>
+      </button>
+
+      <!-- Con Teléfono -->
+      <button
+        type="button"
+        data-filter-pill="CON_TEL"
+        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-900"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600"></span>
+          <span class="text-xs font-bold truncate">Con Teléfono</span>
+        </div>
+        <span
+          id="stat-tel"
+          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+        >
+          {conTelefono}
+        </span>
+      </button>
+
+      <!-- Con Pasaporte -->
+      <button
+        type="button"
+        data-filter-pill="CON_PAS"
+        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-purple-50 border-purple-200 text-purple-900"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-purple-600"></span>
+          <span class="text-xs font-bold truncate">Con Pasaporte</span>
+        </div>
+        <span
+          id="stat-pas"
+          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+        >
+          {conPasaporte}
+        </span>
+      </button>
+
+      <!-- Con Email -->
+      <button
+        type="button"
+        data-filter-pill="CON_EMAIL"
+        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-amber-50 border-amber-200 text-amber-900"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-600"></span>
+          <span class="text-xs font-bold truncate">Con Email</span>
+        </div>
+        <span
+          id="stat-email"
+          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+        >
+          {conEmail}
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Barra de búsqueda por nombre/teléfono/pasaporte y botón Nuevo Contacto -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        id="input-search-contactos"
+        placeholder="Buscar por cliente, teléfono, nombres, pasaporte..."
+        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+      />
+    </div>
+
+    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
+      <span id="visible-rows-counter">
+        Mostrando <strong>{contactos.length}</strong> de <strong>{contactos.length}</strong>
+      </span>
+      <span
+        id="d1-sync-toast"
+        class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition"
+      >
+        Guardado en D1
+      </span>
+      <button
+        type="button"
+        id="btn-nuevo-contacto"
+        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
+      >
+        <span>+</span>
+        <span>Nuevo Contacto</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabla de Contactos -->
+  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+    <div
+      tabindex="0"
+      role="region"
+      aria-labelledby="contactos-table-caption"
+      class="table-wrapper"
+    >
+      <table class="clientes-table text-left text-sm">
+        <caption id="contactos-table-caption" class="sr-only">
+          Directorio general de clientes y pasaportes de Global Travel CW
+        </caption>
+        <thead class="bg-primary text-base text-xs uppercase tracking-wider">
+          <tr>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[200px]">
+              {CONTACTOS_GRID_COLUMNS.contacto}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[140px]">
+              {CONTACTOS_GRID_COLUMNS.telefono}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[160px]">
+              {CONTACTOS_GRID_COLUMNS.email}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[180px]">
+              {CONTACTOS_GRID_COLUMNS.nombre_completo}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[90px]">
+              {CONTACTOS_GRID_COLUMNS.genero}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[150px]">
+              {CONTACTOS_GRID_COLUMNS.pasaporte}
+            </th>
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[120px]">
+              {CONTACTOS_GRID_COLUMNS.vencimiento}
+            </th>
+          </tr>
+        </thead>
+        <tbody id="contactos-tbody" class="divide-y divide-base-border">
+          {
+            contactos.map((c) => {
+              const fullName =
+                c.nombres !== '-' || c.apellidos !== '-'
+                  ? `${c.nombres !== '-' ? c.nombres : ''} ${c.apellidos !== '-' ? c.apellidos : ''}`.trim()
+                  : '-';
+              return (
+                <tr
+                  tabindex="0"
+                  role="button"
+                  aria-label={`Abrir ficha de contacto de ${c.contacto}`}
+                  data-row-id={c.id}
+                  data-row-contacto={c.contacto}
+                  data-row-tel={c.telefono}
+                  data-row-has-tel={c.telefono && c.telefono !== '-' ? '1' : '0'}
+                  data-row-has-pas={c.numero_pasaporte && c.numero_pasaporte !== '-' ? '1' : '0'}
+                  data-row-has-email={c.email && c.email !== '-' ? '1' : '0'}
+                  data-row-record={JSON.stringify(c)}
+                  class="hover:bg-base-muted focus:bg-base-muted focus:outline-none transition-colors cursor-pointer"
+                >
+                  <th
+                    scope="row"
+                    data-cell-contacto={c.id}
+                    class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
+                  >
+                    <span class="text-sm leading-snug">{c.contacto}</span>
+                  </th>
+
+                  <td
+                    data-cell-telefono={c.id}
+                    class="py-3.5 px-4 align-middle text-xs font-semibold text-primary/90 whitespace-nowrap"
+                  >
+                    {c.telefono !== '-' ? (
+                      <span class="text-primary font-mono">{c.telefono}</span>
+                    ) : (
+                      <span class="text-primary/40 font-normal">-</span>
+                    )}
+                  </td>
+
+                  <td
+                    data-cell-email={c.id}
+                    class="py-3.5 px-4 align-middle text-xs text-primary/80"
+                  >
+                    {c.email !== '-' ? (
+                      <span class="text-blue-600 font-medium">{c.email}</span>
+                    ) : (
+                      <span class="text-primary/40 font-normal">-</span>
+                    )}
+                  </td>
+
+                  <td
+                    data-cell-fullname={c.id}
+                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary"
+                  >
+                    {fullName}
+                  </td>
+
+                  <td
+                    data-cell-genero={c.id}
+                    class="py-3.5 px-4 align-middle text-xs text-primary/80 whitespace-nowrap"
+                  >
+                    {c.genero}
+                  </td>
+
+                  <td
+                    data-cell-pasaporte={c.id}
+                    class="py-3.5 px-4 align-middle text-xs font-mono font-bold"
+                  >
+                    {c.numero_pasaporte !== '-' ? (
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-secondary">{c.numero_pasaporte}</span>
+                        {c.nacionalidad_pasaporte !== '-' && (
+                          <span class="text-[10px] uppercase font-sans font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                            {c.nacionalidad_pasaporte}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span class="text-primary/40 font-normal font-sans">-</span>
+                    )}
+                  </td>
+
+                  <td
+                    data-cell-vencimiento={c.id}
+                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary whitespace-nowrap"
+                  >
+                    {c.fecha_vencimiento_pasaporte}
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Modal para Ver / Editar / Crear Ficha de Contacto -->
+<dialog
+  id="modal-contacto"
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border border-base-border overflow-hidden"
+  aria-labelledby="modal-contacto-title"
+>
+  <form id="form-contacto" method="dialog" class="flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+      <div>
+        <h3 id="modal-contacto-title" class="text-lg font-extrabold tracking-tight">
+          Ficha de Contacto
+        </h3>
+        <p id="modal-contacto-subtitle" class="text-xs text-base-muted/80 mt-0.5">
+          Datos generales de cliente y pasaporte
+        </p>
+      </div>
+      <button
+        type="button"
+        id="btn-close-modal-contacto"
+        class="rounded-lg bg-base/10 hover:bg-base/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+      >
+        Cerrar ✕
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+      <input type="hidden" id="field-contacto-id" name="id" value="" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Contacto (Identificador Principal) -->
+        <div class="sm:col-span-2">
+          <label for="field-contacto-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
+            Cliente / Contacto (Nombre para Pendientes y Pagos) *
+          </label>
+          <input
+            type="text"
+            id="field-contacto-contacto"
+            name="contacto"
+            required
+            placeholder="Ej. Jaime Goenaga Pax | +599 9 600 0000"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Teléfono -->
+        <div>
+          <label for="field-contacto-telefono" class="block text-xs font-bold uppercase text-primary mb-1">
+            Teléfono
+          </label>
+          <input
+            type="text"
+            id="field-contacto-telefono"
+            name="telefono"
+            placeholder="+599 9 520 1234"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary font-mono focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label for="field-contacto-email" class="block text-xs font-bold uppercase text-primary mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            id="field-contacto-email"
+            name="email"
+            placeholder="cliente@ejemplo.com"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Nombres -->
+        <div>
+          <label for="field-contacto-nombres" class="block text-xs font-bold uppercase text-primary mb-1">
+            Nombres
+          </label>
+          <input
+            type="text"
+            id="field-contacto-nombres"
+            name="nombres"
+            placeholder="Ej. Jaime Alberto"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Apellidos -->
+        <div>
+          <label for="field-contacto-apellidos" class="block text-xs font-bold uppercase text-primary mb-1">
+            Apellidos
+          </label>
+          <input
+            type="text"
+            id="field-contacto-apellidos"
+            name="apellidos"
+            placeholder="Ej. Goenaga Pax"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Fecha Nacimiento -->
+        <div>
+          <label for="field-contacto-nacimiento" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha de Nacimiento
+          </label>
+          <input
+            type="text"
+            id="field-contacto-nacimiento"
+            name="fecha_nacimiento"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Género -->
+        <div>
+          <label for="field-contacto-genero" class="block text-xs font-bold uppercase text-primary mb-1">
+            Género
+          </label>
+          <select
+            id="field-contacto-genero"
+            name="genero"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-semibold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="-">-</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Femenino">Femenino</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+
+        <!-- Pasaporte: Número -->
+        <div>
+          <label for="field-contacto-pasaporte" class="block text-xs font-bold uppercase text-primary mb-1">
+            Número de Pasaporte
+          </label>
+          <input
+            type="text"
+            id="field-contacto-pasaporte"
+            name="numero_pasaporte"
+            placeholder="Ej. PA12345678"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-mono font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Pasaporte: Nacionalidad -->
+        <div>
+          <label for="field-contacto-nacionalidad" class="block text-xs font-bold uppercase text-primary mb-1">
+            Nacionalidad del Pasaporte
+          </label>
+          <input
+            type="text"
+            id="field-contacto-nacionalidad"
+            name="nacionalidad_pasaporte"
+            placeholder="Ej. Venezolana, Holandesa, Colombiana..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Pasaporte: Fecha Emisión -->
+        <div>
+          <label for="field-contacto-emision" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha Emisión Pasaporte
+          </label>
+          <input
+            type="text"
+            id="field-contacto-emision"
+            name="fecha_emision_pasaporte"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Pasaporte: Fecha Vencimiento -->
+        <div>
+          <label for="field-contacto-vencimiento" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha Vencimiento Pasaporte
+          </label>
+          <input
+            type="text"
+            id="field-contacto-vencimiento"
+            name="fecha_vencimiento_pasaporte"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+      <div>
+        <button
+          type="button"
+          id="btn-delete-modal-contacto"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 border border-secondary px-4 py-2 text-xs font-extrabold text-secondary hover:bg-secondary hover:text-base transition cursor-pointer"
+        >
+          Eliminar Contacto
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2.5 ml-auto">
+        <button
+          type="button"
+          id="btn-cancel-modal-contacto"
+          class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-semibold text-primary hover:bg-base-muted transition cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          id="btn-submit-modal-contacto"
+          class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-5 py-2 text-xs shadow-xs transition cursor-pointer"
+        >
+          Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  import type { ContactoRecord } from '@/types';
+
+  const searchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
+  let selectedFilter = 'ALL';
+  const tbody = document.querySelector<HTMLTableSectionElement>('#contactos-tbody');
+  const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
+  const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
+  const btnNuevoContacto = document.querySelector<HTMLButtonElement>('#btn-nuevo-contacto');
+
+  // Modal Contacto
+  const modal = document.querySelector<HTMLDialogElement>('#modal-contacto');
+  const form = document.querySelector<HTMLFormElement>('#form-contacto');
+  const modalTitle = document.querySelector<HTMLElement>('#modal-contacto-title');
+  const modalSubtitle = document.querySelector<HTMLElement>('#modal-contacto-subtitle');
+  const btnCloseModal = document.querySelector<HTMLButtonElement>('#btn-close-modal-contacto');
+  const btnCancelModal = document.querySelector<HTMLButtonElement>('#btn-cancel-modal-contacto');
+  const btnDeleteModal = document.querySelector<HTMLButtonElement>('#btn-delete-modal-contacto');
+  const btnSubmitModal = document.querySelector<HTMLButtonElement>('#btn-submit-modal-contacto');
+
+  const fId = document.querySelector<HTMLInputElement>('#field-contacto-id');
+  const fContacto = document.querySelector<HTMLInputElement>('#field-contacto-contacto');
+  const fTelefono = document.querySelector<HTMLInputElement>('#field-contacto-telefono');
+  const fEmail = document.querySelector<HTMLInputElement>('#field-contacto-email');
+  const fNombres = document.querySelector<HTMLInputElement>('#field-contacto-nombres');
+  const fApellidos = document.querySelector<HTMLInputElement>('#field-contacto-apellidos');
+  const fNacimiento = document.querySelector<HTMLInputElement>('#field-contacto-nacimiento');
+  const fGenero = document.querySelector<HTMLSelectElement>('#field-contacto-genero');
+  const fPasaporte = document.querySelector<HTMLInputElement>('#field-contacto-pasaporte');
+  const fNacionalidad = document.querySelector<HTMLInputElement>('#field-contacto-nacionalidad');
+  const fEmision = document.querySelector<HTMLInputElement>('#field-contacto-emision');
+  const fVencimiento = document.querySelector<HTMLInputElement>('#field-contacto-vencimiento');
+
+  function showSyncToast(text = 'Guardado en D1') {
+    if (!syncToast) return;
+    syncToast.textContent = text;
+    syncToast.classList.remove('hidden');
+    window.setTimeout(() => {
+      syncToast.classList.add('hidden');
+    }, 2600);
+  }
+
+  function applyFilters() {
+    if (!tbody) return;
+    const query = (searchInput?.value ?? '').toLowerCase().trim();
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+
+    let visibleCount = 0;
+    for (const row of rows) {
+      const recordStr = row.dataset.rowRecord || '';
+      const rec = JSON.parse(recordStr) as ContactoRecord;
+
+      const fullSearch = `${rec.contacto} ${rec.telefono} ${rec.email} ${rec.nombres} ${rec.apellidos} ${rec.numero_pasaporte} ${rec.nacionalidad_pasaporte}`.toLowerCase();
+      const matchesQuery = !query || fullSearch.includes(query);
+
+      let matchesFilter = true;
+      if (selectedFilter === 'CON_TEL') {
+        matchesFilter = rec.telefono !== '-' && Boolean(rec.telefono);
+      } else if (selectedFilter === 'CON_PAS') {
+        matchesFilter = rec.numero_pasaporte !== '-' && Boolean(rec.numero_pasaporte);
+      } else if (selectedFilter === 'CON_EMAIL') {
+        matchesFilter = rec.email !== '-' && Boolean(rec.email);
+      }
+
+      if (matchesQuery && matchesFilter) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    if (visibleCounter) {
+      visibleCounter.innerHTML = `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-filter-pill]').forEach((pill) => {
+      if (pill.dataset.filterPill === selectedFilter) {
+        pill.classList.add('ring-2', 'ring-primary', 'scale-[1.02]');
+      } else {
+        pill.classList.remove('ring-2', 'ring-primary', 'scale-[1.02]');
+      }
+    });
+  }
+
+  function recalculateStats() {
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    let telCount = 0;
+    let pasCount = 0;
+    let emailCount = 0;
+
+    for (const row of rows) {
+      if (row.dataset.rowHasTel === '1') telCount++;
+      if (row.dataset.rowHasPas === '1') pasCount++;
+      if (row.dataset.rowHasEmail === '1') emailCount++;
+    }
+
+    const statTotal = document.querySelector('#stat-total');
+    const statTel = document.querySelector('#stat-tel');
+    const statPas = document.querySelector('#stat-pas');
+    const statEmail = document.querySelector('#stat-email');
+
+    if (statTotal) statTotal.textContent = String(rows.length);
+    if (statTel) statTel.textContent = String(telCount);
+    if (statPas) statPas.textContent = String(pasCount);
+    if (statEmail) statEmail.textContent = String(emailCount);
+  }
+
+  function openContactoModal(record?: ContactoRecord) {
+    if (!modal || !form) return;
+
+    if (record) {
+      if (modalTitle) modalTitle.textContent = `Ficha de Contacto #${record.id}`;
+      if (modalSubtitle) modalSubtitle.textContent = `Actualización de datos en Cloudflare D1`;
+      if (fId) fId.value = String(record.id);
+      if (fContacto) fContacto.value = record.contacto;
+      if (fTelefono) fTelefono.value = record.telefono === '-' ? '' : record.telefono;
+      if (fEmail) fEmail.value = record.email === '-' ? '' : record.email;
+      if (fNombres) fNombres.value = record.nombres === '-' ? '' : record.nombres;
+      if (fApellidos) fApellidos.value = record.apellidos === '-' ? '' : record.apellidos;
+      if (fNacimiento) fNacimiento.value = record.fecha_nacimiento === '-' ? '' : record.fecha_nacimiento;
+      if (fGenero) fGenero.value = record.genero || '-';
+      if (fPasaporte) fPasaporte.value = record.numero_pasaporte === '-' ? '' : record.numero_pasaporte;
+      if (fNacionalidad) fNacionalidad.value = record.nacionalidad_pasaporte === '-' ? '' : record.nacionalidad_pasaporte;
+      if (fEmision) fEmision.value = record.fecha_emision_pasaporte === '-' ? '' : record.fecha_emision_pasaporte;
+      if (fVencimiento) fVencimiento.value = record.fecha_vencimiento_pasaporte === '-' ? '' : record.fecha_vencimiento_pasaporte;
+
+      if (btnDeleteModal) btnDeleteModal.classList.remove('hidden');
+      if (btnSubmitModal) btnSubmitModal.textContent = 'Guardar Cambios';
+    } else {
+      form.reset();
+      if (modalTitle) modalTitle.textContent = 'Nuevo Contacto';
+      if (modalSubtitle) modalSubtitle.textContent = 'Ingresa los datos para registrar en el directorio de clientes';
+      if (fId) fId.value = '';
+      if (btnDeleteModal) btnDeleteModal.classList.add('hidden');
+      if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Contacto';
+    }
+
+    modal.showModal();
+    fContacto?.focus();
+  }
+
+  btnNuevoContacto?.addEventListener('click', () => openContactoModal());
+  btnCloseModal?.addEventListener('click', () => modal?.close());
+  btnCancelModal?.addEventListener('click', () => modal?.close());
+
+  // Clic en fila para abrir modal
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
+    if (!row || !row.dataset.rowRecord) return;
+    const record = JSON.parse(row.dataset.rowRecord) as ContactoRecord;
+    openContactoModal(record);
+  });
+
+  // Filtros pills
+  document.querySelectorAll<HTMLButtonElement>('[data-filter-pill]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      selectedFilter = pill.dataset.filterPill || 'ALL';
+      applyFilters();
+    });
+  });
+
+  searchInput?.addEventListener('input', applyFilters);
+
+  // Eliminar Contacto
+  btnDeleteModal?.addEventListener('click', async () => {
+    const idVal = fId?.value?.trim();
+    if (!idVal) return;
+    const id = Number(idVal);
+
+    if (!window.confirm(`¿Estás seguro de eliminar el contacto #${id} de la base de datos D1?`)) {
+      return;
+    }
+
+    btnDeleteModal.disabled = true;
+    try {
+      const response = await fetch(`/api/contactos?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+        row?.remove();
+        recalculateStats();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Contacto #${id} eliminado de D1`);
+      }
+    } finally {
+      btnDeleteModal.disabled = false;
+    }
+  });
+
+  // Guardar Cambios o Crear Contacto
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!form || !btnSubmitModal) return;
+
+    const idVal = fId?.value?.trim();
+    const contacto = fContacto?.value?.trim();
+    if (!contacto) {
+      alert('El nombre o identificador del cliente/contacto es obligatorio.');
+      fContacto?.focus();
+      return;
+    }
+
+    const payload = {
+      ...(idVal ? { id: Number(idVal) } : {}),
+      contacto,
+      telefono: fTelefono?.value?.trim() || '-',
+      email: fEmail?.value?.trim() || '-',
+      nombres: fNombres?.value?.trim() || '-',
+      apellidos: fApellidos?.value?.trim() || '-',
+      fecha_nacimiento: fNacimiento?.value?.trim() || '-',
+      genero: fGenero?.value || '-',
+      numero_pasaporte: fPasaporte?.value?.trim() || '-',
+      nacionalidad_pasaporte: fNacionalidad?.value?.trim() || '-',
+      fecha_emision_pasaporte: fEmision?.value?.trim() || '-',
+      fecha_vencimiento_pasaporte: fVencimiento?.value?.trim() || '-',
+    };
+
+    btnSubmitModal.disabled = true;
+    btnSubmitModal.textContent = 'Guardando...';
+
+    try {
+      const method = idVal ? 'PATCH' : 'POST';
+      const response = await fetch('/api/contactos', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; data?: ContactoRecord };
+
+      if (response.ok && result.ok && result.data) {
+        const updated = result.data;
+
+        if (!idVal) {
+          modal?.close();
+          window.location.reload();
+          return;
+        }
+
+        const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
+        if (row) {
+          row.dataset.rowRecord = JSON.stringify(updated);
+          row.dataset.rowContacto = updated.contacto;
+          row.dataset.rowTel = updated.telefono;
+          row.dataset.rowHasTel = updated.telefono && updated.telefono !== '-' ? '1' : '0';
+          row.dataset.rowHasPas = updated.numero_pasaporte && updated.numero_pasaporte !== '-' ? '1' : '0';
+          row.dataset.rowHasEmail = updated.email && updated.email !== '-' ? '1' : '0';
+
+          const cellContacto = row.querySelector<HTMLElement>(`[data-cell-contacto="${updated.id}"]`);
+          const cellTelefono = row.querySelector<HTMLElement>(`[data-cell-telefono="${updated.id}"]`);
+          const cellEmail = row.querySelector<HTMLElement>(`[data-cell-email="${updated.id}"]`);
+          const cellFullname = row.querySelector<HTMLElement>(`[data-cell-fullname="${updated.id}"]`);
+          const cellGenero = row.querySelector<HTMLElement>(`[data-cell-genero="${updated.id}"]`);
+          const cellPasaporte = row.querySelector<HTMLElement>(`[data-cell-pasaporte="${updated.id}"]`);
+          const cellVencimiento = row.querySelector<HTMLElement>(`[data-cell-vencimiento="${updated.id}"]`);
+
+          if (cellContacto) cellContacto.textContent = updated.contacto;
+          if (cellTelefono) {
+            cellTelefono.innerHTML =
+              updated.telefono !== '-'
+                ? `<span class="text-primary font-mono">${updated.telefono}</span>`
+                : `<span class="text-primary/40 font-normal">-</span>`;
+          }
+          if (cellEmail) {
+            cellEmail.innerHTML =
+              updated.email !== '-'
+                ? `<span class="text-blue-600 font-medium">${updated.email}</span>`
+                : `<span class="text-primary/40 font-normal">-</span>`;
+          }
+          if (cellFullname) {
+            const fn =
+              updated.nombres !== '-' || updated.apellidos !== '-'
+                ? `${updated.nombres !== '-' ? updated.nombres : ''} ${updated.apellidos !== '-' ? updated.apellidos : ''}`.trim()
+                : '-';
+            cellFullname.textContent = fn;
+          }
+          if (cellGenero) cellGenero.textContent = updated.genero;
+          if (cellPasaporte) {
+            cellPasaporte.innerHTML =
+              updated.numero_pasaporte !== '-'
+                ? `<div class="flex items-center gap-1.5"><span class="text-secondary">${updated.numero_pasaporte}</span>${
+                    updated.nacionalidad_pasaporte !== '-'
+                      ? `<span class="text-[10px] uppercase font-sans font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">${updated.nacionalidad_pasaporte}</span>`
+                      : ''
+                  }</div>`
+                : `<span class="text-primary/40 font-normal font-sans">-</span>`;
+          }
+          if (cellVencimiento) cellVencimiento.textContent = updated.fecha_vencimiento_pasaporte;
+        }
+
+        recalculateStats();
+        applyFilters();
+        modal?.close();
+        showSyncToast(`Contacto #${updated.id} guardado en D1`);
+      } else {
+        alert('Error al guardar el contacto.');
+      }
+    } catch {
+      alert('Error de conexión al guardar el contacto.');
+    } finally {
+      btnSubmitModal.disabled = false;
+      btnSubmitModal.textContent = 'Guardar Cambios';
+    }
+  });
+</script>

@@ -2,15 +2,19 @@
 import Layout from '@/layouts/Layout.astro';
 import Header from '@/components/common/Header.astro';
 import Hero from '@/components/home/Hero.astro';
-import { getAllClientes, getDatabase } from '@/utils/db';
+import { getAllContactos, getAllEstatus, getAllPendientes, getDatabase } from '@/utils/db';
 
 const db = getDatabase(Astro.locals);
-const clientes = await getAllClientes(db);
+const [pendientes, estatusList, contactosList] = await Promise.all([
+  getAllPendientes(db),
+  getAllEstatus(db),
+  getAllContactos(db),
+]);
 ---
 
-<Layout>
-  <Header totalRegistros={clientes.length} />
+<Layout title="Global Travel CW | Panel de Pendientes">
+  <Header activeTab="pendientes" />
   <main class="min-h-screen bg-base-muted pb-12">
-    <Hero clientes={clientes} />
+    <Hero clientes={pendientes} estatusList={estatusList} contactosList={contactosList} />
   </main>
 </Layout>

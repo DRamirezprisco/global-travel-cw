@@ -1,0 +1,16 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Header from '@/components/common/Header.astro';
+import EstatusPanel from '@/components/estatus/EstatusPanel.astro';
+import { getAllEstatus, getDatabase } from '@/utils/db';
+
+const db = getDatabase(Astro.locals);
+const estatusList = await getAllEstatus(db);
+---
+
+<Layout title="Global Travel CW | Catálogo de Estatus">
+  <Header activeTab="estatus" />
+  <main class="min-h-screen bg-base-muted pb-12">
+    <EstatusPanel estatusList={estatusList} />
+  </main>
+</Layout>

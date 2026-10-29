@@ -1,0 +1,16 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Header from '@/components/common/Header.astro';
+import ContactosPanel from '@/components/contactos/ContactosPanel.astro';
+import { getAllContactos, getDatabase } from '@/utils/db';
+
+const db = getDatabase(Astro.locals);
+const contactos = await getAllContactos(db);
+---
+
+<Layout title="Global Travel CW | Directorio de Contactos">
+  <Header activeTab="contactos" />
+  <main class="min-h-screen bg-base-muted pb-12">
+    <ContactosPanel contactos={contactos} />
+  </main>
+</Layout>
