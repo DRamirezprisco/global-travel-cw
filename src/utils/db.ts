@@ -366,6 +366,8 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
           observacion TEXT NOT NULL DEFAULT '-',
           checkin TEXT NOT NULL DEFAULT '-',
           monto TEXT NOT NULL DEFAULT '-',
+          abono TEXT NOT NULL DEFAULT '-',
+          ganancia TEXT NOT NULL DEFAULT '-',
           moneda TEXT DEFAULT 'Fls',
           origen_tabla TEXT NOT NULL DEFAULT '-',
           pendiente_id INTEGER REFERENCES pendientes(id),
@@ -381,6 +383,14 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
 
     try {
       await db.prepare("ALTER TABLE pagos ADD COLUMN moneda TEXT DEFAULT 'Fls'").run();
+    } catch {}
+
+    try {
+      await db.prepare("ALTER TABLE pagos ADD COLUMN abono TEXT NOT NULL DEFAULT '-'").run();
+    } catch {}
+
+    try {
+      await db.prepare("ALTER TABLE pagos ADD COLUMN ganancia TEXT NOT NULL DEFAULT '-'").run();
     } catch {}
 
     // 4. Inicializar tabla `pendientes` si está vacía
@@ -1073,7 +1083,25 @@ export async function syncPagoFromPendiente(
     .first<PagoRecord>();
 
   if (existingByPendienteId) {
-    return existingByPendienteId;
+    // Sincronizar monto, abono y ganancia desde el pendiente si fueron actualizados
+    const updatedExisting = await db
+      .prepare(
+        `UPDATE pagos
+         SET monto = ?,
+             abono = ?,
+             ganancia = ?,
+             updated_at = datetime('now')
+         WHERE id = ?
+         RETURNING *`
+      )
+      .bind(
+        pendiente.monto && pendiente.monto !== '-' ? pendiente.monto : existingByPendienteId.monto,
+        pendiente.abono && pendiente.abono !== '-' ? pendiente.abono : existingByPendienteId.abono ?? '-',
+        pendiente.ganancia && pendiente.ganancia !== '-' ? pendiente.ganancia : existingByPendienteId.ganancia ?? '-',
+        existingByPendienteId.id
+      )
+      .first<PagoRecord>();
+    return updatedExisting ?? existingByPendienteId;
   }
 
   // 2. Verificar si existe un pago no vinculado con el mismo cliente y concepto
@@ -1086,8 +1114,13 @@ export async function syncPagoFromPendiente(
 
   if (existingByMatch) {
     await db
-      .prepare('UPDATE pagos SET pendiente_id = ? WHERE id = ?')
-      .bind(pendiente.id, existingByMatch.id)
+      .prepare('UPDATE pagos SET pendiente_id = ?, abono = ?, ganancia = ? WHERE id = ?')
+      .bind(
+        pendiente.id,
+        pendiente.abono && pendiente.abono !== '-' ? pendiente.abono : existingByMatch.abono ?? '-',
+        pendiente.ganancia && pendiente.ganancia !== '-' ? pendiente.ganancia : existingByMatch.ganancia ?? '-',
+        existingByMatch.id
+      )
       .run();
     return existingByMatch;
   }
@@ -1100,14 +1133,14 @@ export async function syncPagoFromPendiente(
       : 'Boleto / Reserva Emitida';
   const moneda =
     pendiente.monto && (pendiente.monto.includes('$') || pendiente.monto.toLowerCase().includes('usd'))
-      ? 'USD'
+      ? '$'
       : 'Fls';
 
   const newPago = await db
     .prepare(
       `INSERT INTO pagos (
-        contacto, status, codigo, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, moneda, origen_tabla, pendiente_id, updated_at
-      ) VALUES (?, 'Pendiente', ?, ?, ?, ?, ?, ?, ?, 'Reserva Emitida', ?, datetime('now'))
+        contacto, status, codigo, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, abono, ganancia, moneda, origen_tabla, pendiente_id, updated_at
+      ) VALUES (?, 'Pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Reserva Emitida', ?, datetime('now'))
       RETURNING *`
     )
     .bind(
@@ -1120,6 +1153,8 @@ export async function syncPagoFromPendiente(
         : 'Generado automáticamente por Reserva Emitida',
       pendiente.checkin || '-',
       pendiente.monto && pendiente.monto !== '-' ? pendiente.monto : '-',
+      pendiente.abono && pendiente.abono !== '-' ? pendiente.abono : '-',
+      pendiente.ganancia && pendiente.ganancia !== '-' ? pendiente.ganancia : '-',
       moneda,
       pendiente.id
     )
@@ -1156,12 +1191,12 @@ export async function createPago(
     return res.data ?? null;
   }
   await ensureDatabaseInitialized(db);
-  const moneda = data.moneda?.trim() || (data.monto && (data.monto.includes('$') || data.monto.toLowerCase().includes('usd')) ? 'USD' : 'Fls');
+  const moneda = data.moneda?.trim() || (data.monto && (data.monto.includes('$') || data.monto.toLowerCase().includes('usd')) ? '$' : 'Fls');
   const result = await db
     .prepare(
       `INSERT INTO pagos (
-        contacto, status, codigo, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, moneda, origen_tabla, pendiente_id, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        contacto, status, codigo, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, abono, ganancia, moneda, origen_tabla, pendiente_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       RETURNING *`
     )
     .bind(
@@ -1173,6 +1208,8 @@ export async function createPago(
       data.observacion.trim() || '-',
       data.checkin.trim() || '-',
       data.monto.trim() || '-',
+      data.abono?.trim() || '-',
+      data.ganancia?.trim() || '-',
       moneda,
       data.origen_tabla?.trim() || 'Registro Manual',
       data.pendiente_id ?? null
@@ -1217,6 +1254,8 @@ export async function updatePago(
       fields.observacion !== undefined ? fields.observacion.trim() || '-' : existing.observacion,
     checkin: fields.checkin !== undefined ? fields.checkin.trim() || '-' : existing.checkin,
     monto: fields.monto !== undefined ? fields.monto.trim() || '-' : existing.monto,
+    abono: fields.abono !== undefined ? fields.abono.trim() || '-' : existing.abono ?? '-',
+    ganancia: fields.ganancia !== undefined ? fields.ganancia.trim() || '-' : existing.ganancia ?? '-',
     moneda: fields.moneda !== undefined ? fields.moneda.trim() || 'Fls' : existing.moneda ?? 'Fls',
     origen_tabla:
       fields.origen_tabla !== undefined ? fields.origen_tabla.trim() || '-' : existing.origen_tabla,
@@ -1235,6 +1274,8 @@ export async function updatePago(
            observacion = ?,
            checkin = ?,
            monto = ?,
+           abono = ?,
+           ganancia = ?,
            moneda = ?,
            origen_tabla = ?,
            pendiente_id = ?,
@@ -1251,6 +1292,8 @@ export async function updatePago(
       updated.observacion,
       updated.checkin,
       updated.monto,
+      updated.abono,
+      updated.ganancia,
       updated.moneda,
       updated.origen_tabla,
       updated.pendiente_id,

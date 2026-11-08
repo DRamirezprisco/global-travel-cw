@@ -134,6 +134,8 @@ export interface PagoRecord {
   observacion: string;
   checkin: string;
   monto: string;
+  abono?: string;
+  ganancia?: string;
   moneda?: string;
   origen_tabla: string;
   pendiente_id?: number | null;

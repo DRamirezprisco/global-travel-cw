@@ -186,18 +186,27 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
                     data-cell-precio={pago.id}
                     class="py-3.5 px-4 align-middle text-xs font-extrabold"
                   >
-                    {pago.monto !== '-' ? (
-                      <span class="text-secondary">
-                        {pago.monto}
-                        {pago.moneda &&
-                        !pago.monto.toLowerCase().includes(pago.moneda.toLowerCase()) &&
-                        !(pago.moneda === 'USD' && pago.monto.includes('$'))
-                          ? ` ${pago.moneda}`
-                          : ''}
-                      </span>
-                    ) : (
-                      <span class="text-primary/40 font-normal">-</span>
-                    )}
+                    <div class="flex flex-col gap-0.5">
+                      {pago.monto !== '-' ? (
+                        <span class="text-secondary">
+                          {pago.monto}
+                          {pago.moneda &&
+                          !pago.monto.toLowerCase().includes(pago.moneda.toLowerCase()) &&
+                          !(pago.moneda === 'USD' && pago.monto.includes('$')) &&
+                          !(pago.moneda === '$' && pago.monto.includes('$'))
+                            ? ` ${pago.moneda}`
+                            : ''}
+                        </span>
+                      ) : (
+                        <span class="text-primary/40 font-normal">-</span>
+                      )}
+                      {pago.abono && pago.abono !== '-' && (
+                        <span class="text-[11px] font-bold text-amber-700">Abono: {pago.abono}</span>
+                      )}
+                      {pago.ganancia && pago.ganancia !== '-' && (
+                        <span class="text-[11px] font-bold text-emerald-700">Ganancia: {pago.ganancia}</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -220,7 +229,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
       <div>
         <h3 id="modal-pago-title" class="text-lg font-extrabold tracking-tight">
-          Detalle de Pago
+          Cliente
         </h3>
       </div>
       <button
@@ -285,33 +294,80 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
           />
         </div>
 
-        <!-- Precio -->
-        <div>
-          <label for="field-pago-monto" class="block text-xs font-bold uppercase text-primary mb-1">
-            Precio
-          </label>
-          <input
-            type="text"
-            id="field-pago-monto"
-            name="monto"
-            placeholder="0.00"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
-          />
-        </div>
+        <!-- Bloque Financiero: Precio, Abono y Ganancia con selector de 2 monedas estándar (Fls y $) -->
+        <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-base-muted/60 p-3.5 rounded-xl border border-base-border">
+          <!-- Precio (Costo Total) -->
+          <div>
+            <label for="field-pago-monto" class="block text-xs font-bold uppercase text-primary mb-1">
+              Precio (Costo Total)
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-pago-monto"
+                name="monto"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-secondary focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-pago-moneda"
+                name="moneda"
+                aria-label="Moneda del precio"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
 
-        <!-- Moneda -->
-        <div>
-          <label for="field-pago-moneda" class="block text-xs font-bold uppercase text-primary mb-1">
-            Moneda
-          </label>
-          <select
-            id="field-pago-moneda"
-            name="moneda"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
-          >
-            <option value="Fls">Fls (Florines)</option>
-            <option value="$">$ (Dólares)</option>
-          </select>
+          <!-- Abono (Lo que ha abonado del costo total) -->
+          <div>
+            <label for="field-pago-abono" class="block text-xs font-bold uppercase text-primary mb-1">
+              Abono (Abonado)
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-pago-abono"
+                name="abono"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-amber-700 focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-pago-abono-moneda"
+                aria-label="Moneda del abono"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Ganancia -->
+          <div>
+            <label for="field-pago-ganancia" class="block text-xs font-bold uppercase text-primary mb-1">
+              Ganancia
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-pago-ganancia"
+                name="ganancia"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-emerald-700 focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-pago-ganancia-moneda"
+                aria-label="Moneda de la ganancia"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <!-- Concepto -->
@@ -538,6 +594,51 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
   const fFecha = document.querySelector<HTMLInputElement>('#field-pago-fecha');
   const fMonto = document.querySelector<HTMLInputElement>('#field-pago-monto');
   const fMoneda = document.querySelector<HTMLSelectElement>('#field-pago-moneda');
+  const fAbono = document.querySelector<HTMLInputElement>('#field-pago-abono');
+  const fAbonoMoneda = document.querySelector<HTMLSelectElement>('#field-pago-abono-moneda');
+  const fGanancia = document.querySelector<HTMLInputElement>('#field-pago-ganancia');
+  const fGananciaMoneda = document.querySelector<HTMLSelectElement>('#field-pago-ganancia-moneda');
+
+  function splitAmountAndCurrency(raw: string | undefined | null, fallbackMoneda?: string): { amount: string; currency: 'Fls' | '$' } {
+    if (!raw || raw.trim() === '-' || raw.trim() === '') {
+      const defCurr = fallbackMoneda === '$' || fallbackMoneda === 'USD' ? '$' : 'Fls';
+      return { amount: '', currency: defCurr };
+    }
+    const isDollar = raw.includes('$') || /usd/i.test(raw) || fallbackMoneda === '$' || fallbackMoneda === 'USD';
+    const cleanAmount = raw.replace(/fls|usd|\$/gi, '').trim();
+    return {
+      amount: cleanAmount === '-' ? '' : cleanAmount,
+      currency: isDollar ? '$' : 'Fls',
+    };
+  }
+
+  function combineAmountAndCurrency(rawAmount: string | undefined, currency: string | undefined): string {
+    const clean = (rawAmount || '').replace(/fls|usd|\$/gi, '').trim();
+    if (!clean || clean === '-') return '-';
+    const curr = currency === '$' ? '$' : 'Fls';
+    return `${clean} ${curr}`;
+  }
+
+  function renderPagoPrecioCell(updated: PagoRecord): string {
+    const parts: string[] = [];
+    if (updated.monto && updated.monto !== '-') {
+      const hasCurrency =
+        updated.moneda &&
+        !updated.monto.toLowerCase().includes(updated.moneda.toLowerCase()) &&
+        !(updated.moneda === 'USD' && updated.monto.includes('$')) &&
+        !(updated.moneda === '$' && updated.monto.includes('$'));
+      parts.push(`<span class="text-secondary">${updated.monto}${hasCurrency ? ' ' + updated.moneda : ''}</span>`);
+    } else {
+      parts.push(`<span class="text-primary/40 font-normal">-</span>`);
+    }
+    if (updated.abono && updated.abono !== '-') {
+      parts.push(`<span class="text-[11px] font-bold text-amber-700">Abono: ${updated.abono}</span>`);
+    }
+    if (updated.ganancia && updated.ganancia !== '-') {
+      parts.push(`<span class="text-[11px] font-bold text-emerald-700">Ganancia: ${updated.ganancia}</span>`);
+    }
+    return `<div class="flex flex-col gap-0.5">${parts.join('')}</div>`;
+  }
   const fVuelo = document.querySelector<HTMLInputElement>('#field-pago-vuelo');
   const fObservacion = document.querySelector<HTMLTextAreaElement>('#field-pago-observacion');
 
@@ -623,22 +724,25 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     activePagoRecord = record;
 
     if (modalTitle) {
-      modalTitle.textContent = `Detalle de Pago #${record.id}`;
+      modalTitle.textContent = 'Cliente';
     }
 
     if (fId) fId.value = String(record.id);
     if (fContacto) fContacto.value = record.contacto;
     if (fStatus) fStatus.value = record.status;
     if (fFecha) fFecha.value = record.fecha_gestion === '-' ? '' : record.fecha_gestion;
-    if (fMonto) fMonto.value = record.monto === '-' ? '' : record.monto;
-    if (fMoneda) {
-      const isUsd =
-        record.moneda === 'USD' ||
-        record.moneda === '$' ||
-        record.monto.includes('$') ||
-        record.monto.toUpperCase().includes('USD');
-      fMoneda.value = isUsd ? '$' : 'Fls';
-    }
+
+    const parsedMonto = splitAmountAndCurrency(record.monto, record.moneda);
+    if (fMonto) fMonto.value = parsedMonto.amount;
+    if (fMoneda) fMoneda.value = parsedMonto.currency;
+
+    const parsedAbono = splitAmountAndCurrency(record.abono);
+    if (fAbono) fAbono.value = parsedAbono.amount;
+    if (fAbonoMoneda) fAbonoMoneda.value = parsedAbono.currency;
+
+    const parsedGanancia = splitAmountAndCurrency(record.ganancia);
+    if (fGanancia) fGanancia.value = parsedGanancia.amount;
+    if (fGananciaMoneda) fGananciaMoneda.value = parsedGanancia.currency;
     if (fVuelo) fVuelo.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
     if (fObservacion) fObservacion.value = record.observacion === '-' ? '' : record.observacion;
 
@@ -730,11 +834,14 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
         ? `${activePagoRecord.observacion} | ${detalleLog}`
         : detalleLog;
 
+    const defaultCurr = activePagoRecord.moneda === '$' || activePagoRecord.moneda === 'USD' || activePagoRecord.monto.includes('$') ? '$' : 'Fls';
+    const formattedAbono = newStatus === 'Abono' ? combineAmountAndCurrency(montoRaw, montoRaw.includes('$') || /usd/i.test(montoRaw) ? '$' : defaultCurr) : activePagoRecord.abono;
     const payload = {
       id: activePagoRecord.id,
       status: newStatus,
       fecha_gestion: fecha,
       solicitud_vuelo: concepto,
+      abono: formattedAbono,
       observacion: updatedObs,
     };
 
@@ -777,14 +884,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
           if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
           if (cellObs) cellObs.textContent = updated.observacion;
           if (cellPrecio) {
-            const hasCurrency =
-              updated.moneda &&
-              !updated.monto.toLowerCase().includes(updated.moneda.toLowerCase()) &&
-              !(updated.moneda === 'USD' && updated.monto.includes('$'));
-            cellPrecio.innerHTML =
-              updated.monto !== '-'
-                ? `<span class="text-secondary">${updated.monto}${hasCurrency ? ' ' + updated.moneda : ''}</span>`
-                : `<span class="text-primary/40 font-normal">-</span>`;
+            cellPrecio.innerHTML = renderPagoPrecioCell(updated);
           }
         }
 
@@ -873,14 +973,21 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     const formData = new FormData(form);
     const idVal = String(formData.get('id') ?? '').trim();
 
+    const monedaVal = fMoneda?.value === '$' ? '$' : 'Fls';
+    const montoCombined = combineAmountAndCurrency(fMonto?.value, monedaVal);
+    const abonoCombined = combineAmountAndCurrency(fAbono?.value, fAbonoMoneda?.value);
+    const gananciaCombined = combineAmountAndCurrency(fGanancia?.value, fGananciaMoneda?.value);
+
     const payload = {
       id: idVal ? Number(idVal) : undefined,
       contacto: String(formData.get('contacto') ?? '').trim(),
       status: String(formData.get('status') ?? 'Pendiente') as PagoStatus,
       fecha_gestion: String(formData.get('fecha_gestion') ?? '').trim() || '-',
       solicitud_vuelo: String(formData.get('solicitud_vuelo') ?? '').trim() || '-',
-      monto: String(formData.get('monto') ?? '').trim() || '-',
-      moneda: String(formData.get('moneda') ?? 'Fls').trim() || 'Fls',
+      monto: montoCombined,
+      abono: abonoCombined,
+      ganancia: gananciaCombined,
+      moneda: monedaVal,
       observacion: String(formData.get('observacion') ?? '').trim() || '-',
     };
 
@@ -948,14 +1055,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
           if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
           if (cellObs) cellObs.textContent = updated.observacion;
           if (cellPrecio) {
-            const hasCurrency =
-              updated.moneda &&
-              !updated.monto.toLowerCase().includes(updated.moneda.toLowerCase()) &&
-              !(updated.moneda === 'USD' && updated.monto.includes('$'));
-            cellPrecio.innerHTML =
-              updated.monto !== '-'
-                ? `<span class="text-secondary">${updated.monto}${hasCurrency ? ' ' + updated.moneda : ''}</span>`
-                : `<span class="text-primary/40 font-normal">-</span>`;
+            cellPrecio.innerHTML = renderPagoPrecioCell(updated);
           }
         }
 
