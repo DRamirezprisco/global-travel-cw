@@ -2,16 +2,19 @@
 import Layout from '@/layouts/Layout.astro';
 import Header from '@/components/common/Header.astro';
 import PagosPanel from '@/components/pagos/PagosPanel.astro';
-import { getAllPagos, getDatabase } from '@/utils/db';
+import { getAllContactos, getAllPagos, getDatabase } from '@/utils/db';
 
 Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 const db = getDatabase(Astro.locals);
-const pagos = await getAllPagos(db);
+const [pagos, contactosList] = await Promise.all([
+  getAllPagos(db),
+  getAllContactos(db),
+]);
 ---
 
 <Layout title="Global Travel CW | Panel de Pagos">
   <Header activeTab="pagos" />
   <main class="min-h-screen bg-base-muted pb-12">
-    <PagosPanel pagos={pagos} />
+    <PagosPanel pagos={pagos} contactosList={contactosList} />
   </main>
 </Layout>

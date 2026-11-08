@@ -1,6 +1,123 @@
 /**
- * Utilidades para procesamiento numérico y de fechas en Pagos y Pendientes.
+ * Utilidades para procesamiento numérico, de fechas y enlaces dinámicos de WhatsApp Business
+ * en Pagos, Pendientes y Contactos.
  */
+
+export const WHATSAPP_BUSINESS_NUMBER = '+599 9 661 8899';
+export const WHATSAPP_BUSINESS_DIGITS = '59996618899';
+
+/**
+ * Extrae y normaliza un número telefónico en formato internacional de solo dígitos para WhatsApp (wa.me).
+ * Ignora fechas con formato DD/MM/AA.
+ */
+export function normalizePhoneForWhatsApp(raw: string | null | undefined): string {
+  if (!raw || raw.trim() === '-' || raw.trim() === '') return '';
+
+  // Eliminar posibles fechas tipo DD/MM/YYYY o DD/MM/YY para no confundirlas con teléfonos
+  const withoutDates = raw.replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, ' ');
+
+  // Buscar patrón de número telefónico (con o sin código de país +)
+  const phoneMatch = withoutDates.match(/(?:\+\d{1,3}[\s\-\.]?)?(?:\(?\d{1,4}\)?[\s\-\.]?){2,6}\d/);
+  if (!phoneMatch) return '';
+
+  let digits = phoneMatch[0].replace(/\D/g, '');
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.length < 7 || digits.length > 15) {
+    return '';
+  }
+
+  // Si es número local de Curazao (7 dígitos, ej. 6618899) -> agregar 5999
+  if (digits.length === 7) {
+    digits = `5999${digits}`;
+  } else if (digits.length === 8 && digits.startsWith('9')) {
+    // Ej. 96618899 -> agregar 599
+    digits = `599${digits}`;
+  }
+
+  return digits;
+}
+
+/**
+ * Resuelve los dígitos telefónicos de un cliente buscando primero en su teléfono directo,
+ * luego en el directorio de contactos y finalmente en el propio texto del contacto.
+ */
+export function resolveClienteWhatsAppDigits(
+  contactoName: string,
+  telefonoDirecto?: string | null,
+  contactosList?: Array<{ contacto: string; telefono?: string | null }>
+): string {
+  // 1. Teléfono directo si existe
+  const fromDirect = normalizePhoneForWhatsApp(telefonoDirecto);
+  if (fromDirect) return fromDirect;
+
+  const cleanName = (contactoName || '').trim().toLowerCase();
+
+  // 2. Buscar en el directorio de contactos
+  if (cleanName && contactosList && contactosList.length > 0) {
+    const exactMatch = contactosList.find(
+      (c) => c.contacto.trim().toLowerCase() === cleanName && c.telefono && c.telefono !== '-'
+    );
+    if (exactMatch) {
+      const fromExact = normalizePhoneForWhatsApp(exactMatch.telefono);
+      if (fromExact) return fromExact;
+    }
+
+    // Coincidencia parcial (ej. "Mariale Salazar Pax Vzla | 14/10/26" -> "Mariale Salazar Pax Vzla")
+    const baseName = cleanName.split('|')[0].split('(')[0].trim();
+    if (baseName.length >= 4) {
+      const partialMatch = contactosList.find((c) => {
+        const cClean = c.contacto.trim().toLowerCase();
+        return (
+          (cClean === baseName || cClean.startsWith(baseName) || baseName.startsWith(cClean)) &&
+          c.telefono &&
+          c.telefono !== '-'
+        );
+      });
+      if (partialMatch) {
+        const fromPartial = normalizePhoneForWhatsApp(partialMatch.telefono);
+        if (fromPartial) return fromPartial;
+      }
+    }
+  }
+
+  // 3. Extraer del propio nombre/identificador del contacto si incluye teléfono
+  return normalizePhoneForWhatsApp(contactoName);
+}
+
+/**
+ * Construye la URL dinámica de WhatsApp (compatible con WhatsApp Web y App Móvil / WhatsApp Business).
+ * - Si el cliente tiene número telefónico asociado, abre el chat directo con el cliente (`https://wa.me/<numero_cliente>`).
+ * - Si el registro aún no tiene teléfono del cliente, abre WhatsApp Business (`+599 9 661 8899`) con la referencia del cliente lista.
+ */
+export function buildWhatsAppDynamicLink(
+  contactoName: string,
+  telefonoDirecto?: string | null,
+  contactosList?: Array<{ contacto: string; telefono?: string | null }>,
+  extraInfo?: string
+): { url: string; hasClientPhone: boolean; targetPhoneDigits: string; label: string } {
+  const clientDigits = resolveClienteWhatsAppDigits(contactoName, telefonoDirecto, contactosList);
+  const cleanContacto = (contactoName || '').trim() || 'Cliente';
+
+  if (clientDigits) {
+    return {
+      url: `https://wa.me/${clientDigits}`,
+      hasClientPhone: true,
+      targetPhoneDigits: clientDigits,
+      label: `Abrir chat de WhatsApp con ${cleanContacto} (+${clientDigits})`,
+    };
+  }
+
+  const refText = extraInfo && extraInfo !== '-' ? `${cleanContacto} - ${extraInfo}` : cleanContacto;
+  return {
+    url: `https://wa.me/${WHATSAPP_BUSINESS_DIGITS}?text=${encodeURIComponent(refText)}`,
+    hasClientPhone: false,
+    targetPhoneDigits: WHATSAPP_BUSINESS_DIGITS,
+    label: `Abrir WhatsApp Business (${WHATSAPP_BUSINESS_NUMBER}) para ${cleanContacto}`,
+  };
+}
 
 /**
  * Extrae el valor numérico de un string de monto con formatos variados:
@@ -122,7 +239,9 @@ export function parseContactoInitial(raw: string) {
     const parts = trimmed.split('|').map((s) => s.trim());
     const namePart = parts[0] || '';
     const phonePart = parts.slice(1).join(' ').trim();
-    if (phonePart) telefono = phonePart;
+    if (phonePart && normalizePhoneForWhatsApp(phonePart)) {
+      telefono = phonePart;
+    }
     if (namePart) {
       const words = namePart.split(/\s+/);
       if (words.length === 1) {

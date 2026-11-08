@@ -1,6 +1,7 @@
 ---
 import { CONTACTOS_GRID_COLUMNS } from '@/constants/site';
 import type { ContactoRecord } from '@/types';
+import { buildWhatsAppDynamicLink } from '@/utils/pagoHelpers';
 
 interface Props {
   contactos: ContactoRecord[];
@@ -168,6 +169,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
                 c.nombres !== '-' || c.apellidos !== '-'
                   ? `${c.nombres !== '-' ? c.nombres : ''} ${c.apellidos !== '-' ? c.apellidos : ''}`.trim()
                   : '-';
+              const waInfo = buildWhatsAppDynamicLink(c.contacto, c.telefono);
               return (
                 <tr
                   tabindex="0"
@@ -187,7 +189,21 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
                     data-cell-contacto={c.id}
                     class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
                   >
-                    <span class="text-sm leading-snug">{c.contacto}</span>
+                    <div class="flex items-center justify-between gap-2">
+                      <span data-name-for={c.id} class="text-sm leading-snug">{c.contacto}</span>
+                      <a
+                        href={waInfo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-whatsapp-link="true"
+                        data-wa-for={c.id}
+                        title={waInfo.label}
+                        aria-label={waInfo.label}
+                        class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xs transition transform hover:scale-105"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.126.556 4.124 1.531 5.86L0 24l6.335-1.652c1.688.919 3.621 1.444 5.666 1.444 6.627 0 12-5.373 12-12s-5.373-12-11.993-12z"/></svg>
+                      </a>
+                    </div>
                   </th>
 
                   <td
@@ -485,6 +501,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 
 <script>
   import type { ContactoRecord } from '@/types';
+  import { buildWhatsAppDynamicLink } from '@/utils/pagoHelpers';
 
   const searchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
   let selectedFilter = 'ALL';
@@ -630,9 +647,10 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   btnCloseModal?.addEventListener('click', () => modal?.close());
   btnCancelModal?.addEventListener('click', () => modal?.close());
 
-  // Clic en fila para abrir modal
+  // Clic en fila para abrir modal (excepto botón de WhatsApp)
   tbody?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    if (target.closest('[data-whatsapp-link]')) return;
     const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
     if (!row || !row.dataset.rowRecord) return;
     const record = JSON.parse(row.dataset.rowRecord) as ContactoRecord;
@@ -742,7 +760,19 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
           const cellPasaporte = row.querySelector<HTMLElement>(`[data-cell-pasaporte="${updated.id}"]`);
           const cellVencimiento = row.querySelector<HTMLElement>(`[data-cell-vencimiento="${updated.id}"]`);
 
-          if (cellContacto) cellContacto.textContent = updated.contacto;
+          const nameSpan = row.querySelector<HTMLElement>(`[data-name-for="${updated.id}"]`);
+          const waAnchor = row.querySelector<HTMLAnchorElement>(`[data-wa-for="${updated.id}"]`);
+          if (nameSpan) {
+            nameSpan.textContent = updated.contacto;
+          } else if (cellContacto) {
+            cellContacto.textContent = updated.contacto;
+          }
+          if (waAnchor) {
+            const newWa = buildWhatsAppDynamicLink(updated.contacto, updated.telefono);
+            waAnchor.href = newWa.url;
+            waAnchor.title = newWa.label;
+            waAnchor.setAttribute('aria-label', newWa.label);
+          }
           if (cellTelefono) {
             cellTelefono.innerHTML =
               updated.telefono !== '-'
