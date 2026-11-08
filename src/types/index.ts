@@ -89,6 +89,8 @@ export interface PendienteRecord {
   observacion: string;
   checkin: string;
   monto: string;
+  abono?: string;
+  ganancia?: string;
   moneda?: string;
   origen_tabla: string;
   updated_at: string;

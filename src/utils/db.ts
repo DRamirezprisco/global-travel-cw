@@ -334,18 +334,24 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
           observacion TEXT NOT NULL DEFAULT '-',
           checkin TEXT NOT NULL DEFAULT '-',
           monto TEXT NOT NULL DEFAULT '-',
+          abono TEXT NOT NULL DEFAULT '-',
+          ganancia TEXT NOT NULL DEFAULT '-',
           origen_tabla TEXT NOT NULL DEFAULT '-',
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )`
       )
       .run();
 
-    // Asegurar migración de columna status_id en tablas creadas anteriormente
+    // Asegurar migración de columnas en tablas creadas anteriormente
     try {
       await db.prepare('ALTER TABLE pendientes ADD COLUMN status_id INTEGER REFERENCES estatus(id)').run();
-    } catch {
-      // Columna ya existe
-    }
+    } catch {}
+    try {
+      await db.prepare("ALTER TABLE pendientes ADD COLUMN abono TEXT NOT NULL DEFAULT '-'").run();
+    } catch {}
+    try {
+      await db.prepare("ALTER TABLE pendientes ADD COLUMN ganancia TEXT NOT NULL DEFAULT '-'").run();
+    } catch {}
 
     // 3. Tabla separada de Pagos (con pendiente_id relacionado a pendientes)
     await db
@@ -839,8 +845,8 @@ export async function createPendiente(
   const result = await db
     .prepare(
       `INSERT INTO pendientes (
-        contacto, status, status_id, codigo, aerolinea, localizador, apellidos, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, origen_tabla, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        contacto, status, status_id, codigo, aerolinea, localizador, apellidos, fecha_gestion, solicitud_vuelo, observacion, checkin, monto, abono, ganancia, origen_tabla, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       RETURNING *`
     )
     .bind(
@@ -856,6 +862,8 @@ export async function createPendiente(
       data.observacion.trim() || '-',
       data.checkin.trim() || '-',
       data.monto.trim() || '-',
+      data.abono?.trim() || '-',
+      data.ganancia?.trim() || '-',
       data.origen_tabla?.trim() || 'Registro Manual'
     )
     .first<PendienteRecord>();
@@ -929,6 +937,8 @@ export async function updatePendiente(
       fields.observacion !== undefined ? fields.observacion.trim() || '-' : existing.observacion,
     checkin: fields.checkin !== undefined ? fields.checkin.trim() || '-' : existing.checkin,
     monto: fields.monto !== undefined ? fields.monto.trim() || '-' : existing.monto,
+    abono: fields.abono !== undefined ? fields.abono.trim() || '-' : existing.abono ?? '-',
+    ganancia: fields.ganancia !== undefined ? fields.ganancia.trim() || '-' : existing.ganancia ?? '-',
     origen_tabla:
       fields.origen_tabla !== undefined ? fields.origen_tabla.trim() || '-' : existing.origen_tabla,
   };
@@ -948,6 +958,8 @@ export async function updatePendiente(
            observacion = ?,
            checkin = ?,
            monto = ?,
+           abono = ?,
+           ganancia = ?,
            origen_tabla = ?,
            updated_at = datetime('now')
        WHERE id = ?
@@ -966,6 +978,8 @@ export async function updatePendiente(
       updated.observacion,
       updated.checkin,
       updated.monto,
+      updated.abono,
+      updated.ganancia,
       updated.origen_tabla,
       id
     )

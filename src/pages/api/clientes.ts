@@ -61,6 +61,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       observacion: body.observacion ?? '-',
       checkin: body.checkin ?? '-',
       monto: body.monto ?? '-',
+      abono: body.abono ?? '-',
+      ganancia: body.ganancia ?? '-',
       origen_tabla: body.origen_tabla ?? 'Registro Manual',
     });
 

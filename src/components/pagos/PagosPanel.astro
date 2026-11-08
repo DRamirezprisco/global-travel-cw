@@ -309,8 +309,8 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
             name="moneda"
             class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
           >
-            <option value="Fls">Fls</option>
-            <option value="USD">USD</option>
+            <option value="Fls">Fls (Florines)</option>
+            <option value="$">$ (Dólares)</option>
           </select>
         </div>
 
@@ -634,9 +634,10 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     if (fMoneda) {
       const isUsd =
         record.moneda === 'USD' ||
+        record.moneda === '$' ||
         record.monto.includes('$') ||
         record.monto.toUpperCase().includes('USD');
-      fMoneda.value = isUsd ? 'USD' : (record.moneda || 'Fls');
+      fMoneda.value = isUsd ? '$' : 'Fls';
     }
     if (fVuelo) fVuelo.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
     if (fObservacion) fObservacion.value = record.observacion === '-' ? '' : record.observacion;

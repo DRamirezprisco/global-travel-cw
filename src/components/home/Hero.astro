@@ -241,11 +241,19 @@ const statusCounts = activeStatuses.reduce(
                     data-cell-precio={cliente.id}
                     class="py-3.5 px-4 align-middle text-xs font-extrabold"
                   >
-                    {cliente.monto !== '-' ? (
-                      <span class="text-secondary">{cliente.monto}</span>
-                    ) : (
-                      <span class="text-primary/40 font-normal">-</span>
-                    )}
+                    <div class="flex flex-col gap-0.5">
+                      {cliente.monto !== '-' ? (
+                        <span class="text-secondary">{cliente.monto}</span>
+                      ) : (
+                        <span class="text-primary/40 font-normal">-</span>
+                      )}
+                      {cliente.abono && cliente.abono !== '-' && (
+                        <span class="text-[11px] font-bold text-amber-700">Abono: {cliente.abono}</span>
+                      )}
+                      {cliente.ganancia && cliente.ganancia !== '-' && (
+                        <span class="text-[11px] font-bold text-emerald-700">Ganancia: {cliente.ganancia}</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -269,7 +277,7 @@ const statusCounts = activeStatuses.reduce(
     <div class="flex items-center justify-between bg-primary px-6 py-4 text-base border-b-4 border-secondary">
       <div>
         <h3 id="modal-title" class="text-base sm:text-lg font-extrabold">
-          Detalle Completo del Cliente
+          Cliente
         </h3>
         <p id="modal-subtitle" class="text-xs text-base-muted opacity-85 mt-0.5">
           Todos los campos son editables y se guardan en Cloudflare D1
@@ -360,18 +368,79 @@ const statusCounts = activeStatuses.reduce(
           />
         </div>
 
-        <!-- Condicional: Precio -->
-        <div id="container-monto">
-          <label for="field-monto" class="block text-xs font-bold uppercase text-primary mb-1">
-            Precio (Monto / Deuda)
-          </label>
-          <input
-            type="text"
-            id="field-monto"
-            name="monto"
-            placeholder="Ej. 819 Fls o 355$"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
-          />
+        <!-- Bloque Financiero: Precio, Abono y Ganancia con selector de 2 monedas estándar (Fls y $) -->
+        <div id="container-monto" class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-base-muted/60 p-3.5 rounded-xl border border-base-border">
+          <!-- Precio (Costo Total) -->
+          <div>
+            <label for="field-monto" class="block text-xs font-bold uppercase text-primary mb-1">
+              Precio (Costo Total)
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-monto"
+                name="monto"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-secondary focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-monto-moneda"
+                aria-label="Moneda del precio"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Abono (Lo que ha abonado del costo total) -->
+          <div>
+            <label for="field-abono" class="block text-xs font-bold uppercase text-primary mb-1">
+              Abono (Abonado)
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-abono"
+                name="abono"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-amber-700 focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-abono-moneda"
+                aria-label="Moneda del abono"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Ganancia -->
+          <div>
+            <label for="field-ganancia" class="block text-xs font-bold uppercase text-primary mb-1">
+              Ganancia
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="text"
+                id="field-ganancia"
+                name="ganancia"
+                placeholder="0.00"
+                class="w-full min-w-0 rounded-lg border border-base-border bg-base px-3 py-2 font-bold text-emerald-700 focus:border-primary focus:outline-none"
+              />
+              <select
+                id="field-ganancia-moneda"
+                aria-label="Moneda de la ganancia"
+                class="shrink-0 rounded-lg border border-base-border bg-base px-2.5 py-2 text-xs font-extrabold text-primary focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Fls">Fls</option>
+                <option value="$">$</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <!-- Condicional: Aerolínea -->
@@ -693,6 +762,30 @@ const statusCounts = activeStatuses.reduce(
   const fFecha = document.querySelector<HTMLInputElement>('#field-fecha');
   const fSolicitud = document.querySelector<HTMLInputElement>('#field-solicitud');
   const fMonto = document.querySelector<HTMLInputElement>('#field-monto');
+  const fMontoMoneda = document.querySelector<HTMLSelectElement>('#field-monto-moneda');
+  const fAbono = document.querySelector<HTMLInputElement>('#field-abono');
+  const fAbonoMoneda = document.querySelector<HTMLSelectElement>('#field-abono-moneda');
+  const fGanancia = document.querySelector<HTMLInputElement>('#field-ganancia');
+  const fGananciaMoneda = document.querySelector<HTMLSelectElement>('#field-ganancia-moneda');
+
+  function splitAmountAndCurrency(raw: string | undefined | null): { amount: string; currency: 'Fls' | '$' } {
+    if (!raw || raw.trim() === '-' || raw.trim() === '') {
+      return { amount: '', currency: 'Fls' };
+    }
+    const isDollar = raw.includes('$') || /usd/i.test(raw);
+    const cleanAmount = raw.replace(/fls|usd|\$/gi, '').trim();
+    return {
+      amount: cleanAmount === '-' ? '' : cleanAmount,
+      currency: isDollar ? '$' : 'Fls',
+    };
+  }
+
+  function combineAmountAndCurrency(rawAmount: string | undefined, currency: string | undefined): string {
+    const clean = (rawAmount || '').replace(/fls|usd|\$/gi, '').trim();
+    if (!clean || clean === '-') return '-';
+    const curr = currency === '$' ? '$' : 'Fls';
+    return `${clean} ${curr}`;
+  }
   const fAerolinea = document.querySelector<HTMLInputElement>('#field-aerolinea');
   const fLocalizador = document.querySelector<HTMLInputElement>('#field-localizador');
   const fApellidos = document.querySelector<HTMLInputElement>('#field-apellidos');
@@ -799,10 +892,15 @@ const statusCounts = activeStatuses.reduce(
     ].includes(currentStatus);
 
     const hasPrecio = [
+      'Pendiente Cotizacion',
       'Cotizacion Enviada',
       'Reserva por 24h',
       'Reserva Emitida',
-    ].includes(currentStatus);
+      'Cambio Tickets',
+      'Visas',
+      'Consultas',
+      'Finalizado',
+    ].includes(currentStatus) || Boolean(currentStatus);
 
     const hasReservaFields = [
       'Reserva por 24h',
@@ -886,7 +984,7 @@ const statusCounts = activeStatuses.reduce(
     if (!modal || !form) return;
 
     if (modalTitle) {
-      modalTitle.textContent = `Expediente de Cliente #${record.id}`;
+      modalTitle.textContent = 'Cliente';
     }
     if (modalSubtitle) {
       modalSubtitle.textContent = `Última act. D1: ${record.updated_at || 'Reciente'}`;
@@ -897,7 +995,18 @@ const statusCounts = activeStatuses.reduce(
     if (fStatus) fStatus.value = record.status;
     if (fFecha) fFecha.value = record.fecha_gestion === '-' ? '' : record.fecha_gestion;
     if (fSolicitud) fSolicitud.value = record.solicitud_vuelo === '-' ? '' : record.solicitud_vuelo;
-    if (fMonto) fMonto.value = record.monto === '-' ? '' : record.monto;
+
+    const parsedMonto = splitAmountAndCurrency(record.monto);
+    if (fMonto) fMonto.value = parsedMonto.amount;
+    if (fMontoMoneda) fMontoMoneda.value = parsedMonto.currency;
+
+    const parsedAbono = splitAmountAndCurrency(record.abono);
+    if (fAbono) fAbono.value = parsedAbono.amount;
+    if (fAbonoMoneda) fAbonoMoneda.value = parsedAbono.currency;
+
+    const parsedGanancia = splitAmountAndCurrency(record.ganancia);
+    if (fGanancia) fGanancia.value = parsedGanancia.amount;
+    if (fGananciaMoneda) fGananciaMoneda.value = parsedGanancia.currency;
 
     const parsed = parseCodigo(record.codigo, record);
     if (fAerolinea) fAerolinea.value = parsed.aerolinea;
@@ -1048,11 +1157,17 @@ const statusCounts = activeStatuses.reduce(
     if (fAerolinea) fAerolinea.value = '';
     if (fLocalizador) fLocalizador.value = '';
     if (fApellidos) fApellidos.value = '';
+    if (fMonto) fMonto.value = '';
+    if (fMontoMoneda) fMontoMoneda.value = 'Fls';
+    if (fAbono) fAbono.value = '';
+    if (fAbonoMoneda) fAbonoMoneda.value = 'Fls';
+    if (fGanancia) fGanancia.value = '';
+    if (fGananciaMoneda) fGananciaMoneda.value = 'Fls';
     if (fStatus && fStatus.options.length > 0) {
       fStatus.selectedIndex = 0;
     }
     updateModalFieldVisibility();
-    if (modalTitle) modalTitle.textContent = 'Nuevo Pendiente';
+    if (modalTitle) modalTitle.textContent = 'Cliente';
     if (modalSubtitle) modalSubtitle.textContent = 'Ingresa los datos para registrar en Cloudflare D1';
     if (btnDeleteModal) btnDeleteModal.classList.add('hidden');
     if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Pendiente';
@@ -1202,10 +1317,19 @@ const statusCounts = activeStatuses.reduce(
           if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
           if (cellObs) cellObs.textContent = updated.observacion;
           if (cellPrecio) {
-            cellPrecio.innerHTML =
-              updated.monto !== '-'
-                ? `<span class="text-secondary">${updated.monto}</span>`
-                : `<span class="text-primary/40 font-normal">-</span>`;
+            const parts: string[] = [];
+            if (updated.monto && updated.monto !== '-') {
+              parts.push(`<span class="text-secondary">${updated.monto}</span>`);
+            } else {
+              parts.push(`<span class="text-primary/40 font-normal">-</span>`);
+            }
+            if (updated.abono && updated.abono !== '-') {
+              parts.push(`<span class="text-[11px] font-bold text-amber-700">Abono: ${updated.abono}</span>`);
+            }
+            if (updated.ganancia && updated.ganancia !== '-') {
+              parts.push(`<span class="text-[11px] font-bold text-emerald-700">Ganancia: ${updated.ganancia}</span>`);
+            }
+            cellPrecio.innerHTML = `<div class="flex flex-col gap-0.5">${parts.join('')}</div>`;
           }
         }
 
@@ -1305,7 +1429,9 @@ const statusCounts = activeStatuses.reduce(
     const status = fStatus?.value?.trim();
     const fecha = fFecha?.value?.trim() || '-';
     const solicitud = fSolicitud?.value?.trim() || '-';
-    const monto = fMonto?.value?.trim() || '-';
+    const monto = combineAmountAndCurrency(fMonto?.value, fMontoMoneda?.value);
+    const abono = combineAmountAndCurrency(fAbono?.value, fAbonoMoneda?.value);
+    const ganancia = combineAmountAndCurrency(fGanancia?.value, fGananciaMoneda?.value);
     const observacion = fObservacion?.value?.trim() || '-';
     const aerolinea = fAerolinea?.value?.trim() || '-';
     const localizador = fLocalizador?.value?.trim() || '-';
@@ -1336,6 +1462,8 @@ const statusCounts = activeStatuses.reduce(
       fecha_gestion: fecha,
       solicitud_vuelo: solicitud,
       monto,
+      abono,
+      ganancia,
       observacion,
       aerolinea,
       localizador,
