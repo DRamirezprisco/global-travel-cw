@@ -393,12 +393,26 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
       await db.prepare("ALTER TABLE pagos ADD COLUMN ganancia TEXT NOT NULL DEFAULT '-'").run();
     } catch {}
 
-    // 4. Inicializar tabla `pendientes` si está vacía
+    // Asegurar tabla de control de migraciones para no re-sembrar pendientes eliminados
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS _app_migrations (
+          key TEXT PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`
+      )
+      .run();
+
+    const alreadySeededOrMigrated = await db
+      .prepare("SELECT key FROM _app_migrations WHERE key IN ('local_oct30_to_d1_v1', 'pendientes_seeded_v1') LIMIT 1")
+      .first<{ key: string }>();
+
+    // 4. Inicializar tabla `pendientes` si está vacía (solo en el primer arranque histórico)
     const countPendientes = await db
       .prepare('SELECT COUNT(*) as total FROM pendientes')
       .first<{ total: number }>();
 
-    if (!countPendientes || countPendientes.total === 0) {
+    if ((!countPendientes || countPendientes.total === 0) && !alreadySeededOrMigrated) {
       let seededFromClientes = false;
       try {
         const hasClientes = await db
@@ -527,11 +541,12 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
       }
     }
 
-    // 6. Asegurar que todo pago existente tenga un pendiente_id relacionado.
-    try {
-      const unlinkedPagos = await db
-        .prepare('SELECT * FROM pagos WHERE pendiente_id IS NULL OR pendiente_id = 0')
-        .all<PagoRecord>();
+    // 6. Asegurar que todo pago existente tenga un pendiente_id relacionado (solo en inicialización histórica, no recrear pendientes eliminados).
+    if (!alreadySeededOrMigrated) {
+      try {
+        const unlinkedPagos = await db
+          .prepare('SELECT * FROM pagos WHERE pendiente_id IS NULL OR pendiente_id = 0')
+          .all<PagoRecord>();
 
       if (unlinkedPagos.results && unlinkedPagos.results.length > 0) {
         const finalizadoEstatus = await db
@@ -567,7 +582,8 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
           }
         }
       }
-    } catch {}
+      } catch {}
+    }
 
     // 7. Tabla Contactos (Directorio general de contactos y pasaportes)
     await db
@@ -1005,6 +1021,52 @@ export async function updatePendiente(
   return result ?? null;
 }
 
+/**
+ * Garantiza que antes de eliminar uno o varios pendientes, sus datos de cliente
+ * queden resguardados en la tabla `contactos` para mantener los contactos 100% intactos.
+ */
+async function preserveContactosBeforeDelete(
+  db: D1Database,
+  rows: Array<{ contacto: string; apellidos?: string }>
+): Promise<void> {
+  if (!rows || rows.length === 0) return;
+  try {
+    const insertStmt = db.prepare(
+      `INSERT OR IGNORE INTO contactos (
+        contacto, telefono, email, nombres, apellidos,
+        fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
+        genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
+        created_at, updated_at
+      ) VALUES (?, ?, '-', ?, ?, '-', '-', '-', '-', '-', '-', datetime('now'), datetime('now'))`
+    );
+
+    const seen = new Set<string>();
+    const batch = [];
+    for (const r of rows) {
+      const rawName = (r.contacto || '').trim();
+      if (!rawName || seen.has(rawName.toLowerCase())) continue;
+      seen.add(rawName.toLowerCase());
+      const parsed = parseContactoInitial(rawName);
+      const apellidos =
+        r.apellidos && r.apellidos !== '-' ? r.apellidos.trim() : parsed.apellidos;
+      batch.push(
+        insertStmt.bind(parsed.contacto, parsed.telefono, parsed.nombres, apellidos)
+      );
+    }
+    if (batch.length > 0) {
+      await db.batch(batch);
+    }
+  } catch {}
+}
+
+async function markPendientesSeededFlag(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare("INSERT OR IGNORE INTO _app_migrations (key, applied_at) VALUES ('pendientes_seeded_v1', datetime('now'))")
+      .run();
+  } catch {}
+}
+
 export async function deletePendiente(db: D1Database, id: number): Promise<boolean> {
   if (isLocalDevEnvironment()) {
     const res = await remoteApiFetch<unknown>(`/api/pendientes?id=${id}`, {
@@ -1013,8 +1075,114 @@ export async function deletePendiente(db: D1Database, id: number): Promise<boole
     return Boolean(res.ok);
   }
   await ensureDatabaseInitialized(db);
+
+  // 1. Preservar el contacto en la tabla contactos antes de eliminar el pendiente
+  try {
+    const existing = await db
+      .prepare('SELECT contacto, apellidos FROM pendientes WHERE id = ?')
+      .bind(id)
+      .first<{ contacto: string; apellidos?: string }>();
+    if (existing) {
+      await preserveContactosBeforeDelete(db, [existing]);
+    }
+  } catch {}
+
+  // 2. Desvincular pagos asociados para evitar bloqueo por llave foránea (manteniendo el pago y el contacto intactos)
+  try {
+    await db.prepare('UPDATE pagos SET pendiente_id = NULL WHERE pendiente_id = ?').bind(id).run();
+  } catch {}
+
+  await markPendientesSeededFlag(db);
+
+  // 3. Eliminar únicamente de la tabla pendientes
   const res = await db.prepare('DELETE FROM pendientes WHERE id = ?').bind(id).run();
   return Boolean(res.success);
+}
+
+export async function deleteMultiplePendientes(db: D1Database, ids: number[]): Promise<number> {
+  const validIds = ids.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0);
+  if (validIds.length === 0) return 0;
+
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<{ deleted?: number }>('/api/pendientes', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: validIds }),
+    });
+    return res.ok ? (res.data?.deleted ?? validIds.length) : 0;
+  }
+
+  await ensureDatabaseInitialized(db);
+  const placeholders = validIds.map(() => '?').join(', ');
+
+  // 1. Preservar todos los contactos en la tabla contactos
+  try {
+    const { results } = await db
+      .prepare(`SELECT contacto, apellidos FROM pendientes WHERE id IN (${placeholders})`)
+      .bind(...validIds)
+      .all<{ contacto: string; apellidos?: string }>();
+    if (results && results.length > 0) {
+      await preserveContactosBeforeDelete(db, results);
+    }
+  } catch {}
+
+  // 2. Desvincular pagos asociados
+  try {
+    await db
+      .prepare(`UPDATE pagos SET pendiente_id = NULL WHERE pendiente_id IN (${placeholders})`)
+      .bind(...validIds)
+      .run();
+  } catch {}
+
+  await markPendientesSeededFlag(db);
+
+  // 3. Eliminar únicamente de pendientes
+  const res = await db
+    .prepare(`DELETE FROM pendientes WHERE id IN (${placeholders})`)
+    .bind(...validIds)
+    .run();
+
+  return res.meta?.changes ?? validIds.length;
+}
+
+export async function deleteAllPendientes(db: D1Database, status?: string): Promise<number> {
+  if (isLocalDevEnvironment()) {
+    const query = status && status !== 'ALL' ? `?all=true&status=${encodeURIComponent(status)}` : '?all=true';
+    const res = await remoteApiFetch<{ deleted?: number }>(`/api/pendientes${query}`, {
+      method: 'DELETE',
+    });
+    return res.ok ? (res.data?.deleted ?? 0) : 0;
+  }
+
+  await ensureDatabaseInitialized(db);
+
+  // 1. Preservar todos los contactos en la tabla contactos antes de vaciar pendientes
+  try {
+    const { results } = await db
+      .prepare('SELECT contacto, apellidos FROM pendientes')
+      .all<{ contacto: string; apellidos?: string }>();
+    if (results && results.length > 0) {
+      await preserveContactosBeforeDelete(db, results);
+    }
+  } catch {}
+
+  await markPendientesSeededFlag(db);
+
+  if (status && status !== 'ALL') {
+    try {
+      await db
+        .prepare('UPDATE pagos SET pendiente_id = NULL WHERE pendiente_id IN (SELECT id FROM pendientes WHERE status = ?)')
+        .bind(status)
+        .run();
+    } catch {}
+    const res = await db.prepare('DELETE FROM pendientes WHERE status = ?').bind(status).run();
+    return res.meta?.changes ?? 0;
+  } else {
+    try {
+      await db.prepare('UPDATE pagos SET pendiente_id = NULL WHERE pendiente_id IS NOT NULL').run();
+    } catch {}
+    const res = await db.prepare('DELETE FROM pendientes').run();
+    return res.meta?.changes ?? 0;
+  }
 }
 
 // Aliases para compatibilidad con llamadas existentes

@@ -3,6 +3,8 @@ import { ALL_PENDIENTE_STATUS_LIST } from '@/constants/statuses';
 import type { NewPendienteRecord } from '@/types';
 import {
   createPendiente,
+  deleteAllPendientes,
+  deleteMultiplePendientes,
   deletePendiente,
   getAllEstatus,
   getAllPendientes,
@@ -141,15 +143,48 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
   try {
     const db = getDatabase(locals);
     let id: number | null = null;
+    let ids: number[] | null = null;
+    let deleteAll = url.searchParams.get('all') === 'true';
+    let filterStatus = url.searchParams.get('status') || undefined;
 
     const queryId = url.searchParams.get('id');
+    const queryIds = url.searchParams.get('ids');
     if (queryId) {
       id = Number(queryId);
+    } else if (queryIds) {
+      ids = queryIds
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0);
     } else {
       try {
-        const body = (await request.json()) as { id?: number };
+        const body = (await request.json()) as {
+          id?: number;
+          ids?: number[];
+          all?: boolean;
+          status?: string;
+        };
         if (body.id) id = Number(body.id);
+        if (Array.isArray(body.ids)) ids = body.ids;
+        if (body.all === true) deleteAll = true;
+        if (body.status) filterStatus = body.status;
       } catch {}
+    }
+
+    if (deleteAll) {
+      const deleted = await deleteAllPendientes(db, filterStatus);
+      return new Response(
+        JSON.stringify({ ok: true, data: { deleted }, deleted, contactsIntact: true }),
+        { status: 200, headers: JSON_HEADERS }
+      );
+    }
+
+    if (ids && ids.length > 0) {
+      const deleted = await deleteMultiplePendientes(db, ids);
+      return new Response(
+        JSON.stringify({ ok: true, data: { deleted }, deleted, ids, contactsIntact: true }),
+        { status: 200, headers: JSON_HEADERS }
+      );
     }
 
     if (!id || !Number.isInteger(id) || id <= 0) {
@@ -168,10 +203,13 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
       );
     }
 
-    return new Response(JSON.stringify({ ok: true, message: 'Pendiente eliminado con éxito.' }), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({ ok: true, id, contactsIntact: true, message: 'Pendiente eliminado con éxito (contacto intacto).' }),
+      {
+        status: 200,
+        headers: JSON_HEADERS,
+      }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al eliminar pendiente en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {

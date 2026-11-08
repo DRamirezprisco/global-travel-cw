@@ -115,14 +115,34 @@ const statusCounts = activeStatuses.reduce(
       >
         Guardado en D1
       </span>
-      <button
-        type="button"
-        id="btn-open-new-modal"
-        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
-      >
-        <span>+</span>
-        <span>Nuevo Pendiente</span>
-      </button>
+      <div class="flex flex-wrap items-center gap-2 ml-auto sm:ml-0">
+        <button
+          type="button"
+          id="btn-delete-selected-pendientes"
+          title="Eliminar los pendientes marcados (los contactos se mantienen intactos)"
+          class="hidden rounded-lg bg-secondary/10 border border-secondary text-secondary hover:bg-secondary hover:text-base font-extrabold px-3.5 py-2 text-xs shadow-xs transition items-center gap-1.5 cursor-pointer"
+        >
+          <span>🗑️</span>
+          <span id="label-delete-selected">Eliminar Seleccionados (0)</span>
+        </button>
+        <button
+          type="button"
+          id="btn-delete-all-pendientes"
+          title="Eliminar pendientes actuales manteniendo el directorio de Contactos intacto"
+          class="rounded-lg border border-secondary/60 bg-base hover:bg-secondary hover:text-base text-secondary font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>🗑️</span>
+          <span id="label-delete-all">Eliminar Pendientes</span>
+        </button>
+        <button
+          type="button"
+          id="btn-open-new-modal"
+          class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>+</span>
+          <span>Nuevo Pendiente</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -140,8 +160,17 @@ const statusCounts = activeStatuses.reduce(
         </caption>
         <thead class="bg-primary text-base text-xs uppercase tracking-wider">
           <tr>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[230px]">
-              {GRID_COLUMNS.contacto}
+            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[260px]">
+              <div class="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  id="select-all-pendientes"
+                  title="Seleccionar todos los pendientes visibles"
+                  aria-label="Seleccionar todos los pendientes visibles"
+                  class="h-4 w-4 rounded border-base/60 accent-secondary cursor-pointer"
+                />
+                <span>{GRID_COLUMNS.contacto}</span>
+              </div>
             </th>
             <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[210px]">
               {GRID_COLUMNS.status}
@@ -183,19 +212,40 @@ const statusCounts = activeStatuses.reduce(
                     class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
                   >
                     <div class="flex items-center justify-between gap-2">
-                      <span data-name-for={cliente.id} class="text-sm leading-snug">{cliente.contacto}</span>
-                      <a
-                        href={waInfo.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-whatsapp-link="true"
-                        data-wa-for={cliente.id}
-                        title={waInfo.label}
-                        aria-label={waInfo.label}
-                        class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xs transition transform hover:scale-105"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.126.556 4.124 1.531 5.86L0 24l6.335-1.652c1.688.919 3.621 1.444 5.666 1.444 6.627 0 12-5.373 12-12s-5.373-12-11.993-12z"/></svg>
-                      </a>
+                      <div class="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          data-row-checkbox="true"
+                          data-select-pendiente={cliente.id}
+                          aria-label={`Seleccionar pendiente de ${cliente.contacto}`}
+                          class="h-4 w-4 shrink-0 rounded border-base-border accent-secondary cursor-pointer"
+                        />
+                        <span data-name-for={cliente.id} class="text-sm leading-snug">{cliente.contacto}</span>
+                      </div>
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        <a
+                          href={waInfo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-whatsapp-link="true"
+                          data-wa-for={cliente.id}
+                          title={waInfo.label}
+                          aria-label={waInfo.label}
+                          class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xs transition transform hover:scale-105"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.126.556 4.124 1.531 5.86L0 24l6.335-1.652c1.688.919 3.621 1.444 5.666 1.444 6.627 0 12-5.373 12-12s-5.373-12-11.993-12z"/></svg>
+                        </a>
+                        <button
+                          type="button"
+                          data-delete-pendiente={cliente.id}
+                          data-delete-name={cliente.contacto}
+                          title={`Eliminar pendiente de ${cliente.contacto} (mantiene el contacto intacto)`}
+                          aria-label={`Eliminar pendiente de ${cliente.contacto}`}
+                          class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary hover:bg-secondary hover:text-base active:bg-secondary-dark shadow-xs transition cursor-pointer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        </button>
+                      </div>
                     </div>
                   </th>
 
@@ -523,9 +573,10 @@ const statusCounts = activeStatuses.reduce(
         <button
           type="button"
           id="btn-delete-modal"
+          title="Elimina únicamente este pendiente; el contacto en Contactos se mantiene intacto"
           class="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 border border-secondary px-4 py-2 text-xs font-extrabold text-secondary hover:bg-secondary hover:text-base transition cursor-pointer"
         >
-          Eliminar Cliente
+          🗑️ Eliminar Pendiente (Mantener Contacto)
         </button>
       </div>
 
@@ -1041,13 +1092,195 @@ const statusCounts = activeStatuses.reduce(
       const targetStatus = pill.dataset.statusPill ?? 'ALL';
       selectedStatus = selectedStatus === targetStatus ? 'ALL' : targetStatus;
       applyFilters();
+      updateSelectionUI();
     });
   });
 
-  // Clic o Enter sobre cualquier fila de la tabla -> abre el modal (excepto botón de WhatsApp)
-  tbody?.addEventListener('click', (event) => {
+  const selectAllCheckbox = document.querySelector<HTMLInputElement>('#select-all-pendientes');
+  const btnDeleteSelected = document.querySelector<HTMLButtonElement>('#btn-delete-selected-pendientes');
+  const labelDeleteSelected = document.querySelector<HTMLElement>('#label-delete-selected');
+  const btnDeleteAll = document.querySelector<HTMLButtonElement>('#btn-delete-all-pendientes');
+  const labelDeleteAll = document.querySelector<HTMLElement>('#label-delete-all');
+
+  function getSelectedPendienteIds(): number[] {
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll<HTMLInputElement>('input[data-select-pendiente]:checked'))
+      .map((cb) => Number(cb.dataset.selectPendiente))
+      .filter((n) => Number.isInteger(n) && n > 0);
+  }
+
+  function updateSelectionUI() {
+    const selectedIds = getSelectedPendienteIds();
+    if (btnDeleteSelected && labelDeleteSelected) {
+      if (selectedIds.length > 0) {
+        btnDeleteSelected.classList.remove('hidden');
+        btnDeleteSelected.classList.add('flex');
+        labelDeleteSelected.textContent = `Eliminar Seleccionados (${selectedIds.length})`;
+      } else {
+        btnDeleteSelected.classList.add('hidden');
+        btnDeleteSelected.classList.remove('flex');
+      }
+    }
+
+    if (labelDeleteAll) {
+      labelDeleteAll.textContent =
+        selectedStatus !== 'ALL'
+          ? `Eliminar "${selectedStatus}"`
+          : 'Eliminar Todos los Pendientes';
+    }
+
+    if (selectAllCheckbox && tbody) {
+      const visibleCheckboxes = Array.from(
+        tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]')
+      )
+        .filter((r) => r.style.display !== 'none')
+        .map((r) => r.querySelector<HTMLInputElement>('input[data-select-pendiente]'))
+        .filter((cb): cb is HTMLInputElement => Boolean(cb));
+
+      selectAllCheckbox.checked =
+        visibleCheckboxes.length > 0 && visibleCheckboxes.every((cb) => cb.checked);
+    }
+  }
+
+  selectAllCheckbox?.addEventListener('change', () => {
+    if (!tbody) return;
+    const checked = selectAllCheckbox.checked;
+    Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]')).forEach((row) => {
+      if (row.style.display === 'none') return;
+      const cb = row.querySelector<HTMLInputElement>('input[data-select-pendiente]');
+      if (cb) cb.checked = checked;
+    });
+    updateSelectionUI();
+  });
+
+  tbody?.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.matches('input[data-select-pendiente]')) {
+      updateSelectionUI();
+    }
+  });
+
+  // Eliminar pendientes seleccionados manteniendo contactos intactos
+  btnDeleteSelected?.addEventListener('click', async () => {
+    const ids = getSelectedPendienteIds();
+    if (ids.length === 0) return;
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de eliminar ${ids.length} pendiente(s) seleccionado(s)?\n\n✅ Los contactos en el directorio de Contactos se mantendrán 100% intactos.`
+    );
+    if (!confirmed) return;
+
+    btnDeleteSelected.disabled = true;
+    try {
+      const response = await fetch('/api/pendientes', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+
+      if (response.ok) {
+        ids.forEach((id) => {
+          const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+          row?.remove();
+        });
+        recalculateStatusCounts();
+        applyFilters();
+        updateSelectionUI();
+        showSyncToast(`${ids.length} pendiente(s) eliminado(s) (Contactos intactos)`);
+      } else {
+        alert('No se pudieron eliminar los pendientes seleccionados.');
+      }
+    } finally {
+      btnDeleteSelected.disabled = false;
+    }
+  });
+
+  // Eliminar todos los pendientes (o los del estatus filtrado) manteniendo contactos intactos
+  btnDeleteAll?.addEventListener('click', async () => {
+    if (!tbody) return;
+    const allRows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const targetRows =
+      selectedStatus !== 'ALL'
+        ? allRows.filter((r) => r.dataset.rowStatus === selectedStatus)
+        : allRows;
+
+    if (targetRows.length === 0) {
+      alert('No hay pendientes para eliminar en esta vista.');
+      return;
+    }
+
+    const scopeLabel =
+      selectedStatus !== 'ALL'
+        ? `los ${targetRows.length} pendiente(s) del estatus "${selectedStatus}"`
+        : `TODOS los ${targetRows.length} pendientes`;
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de eliminar ${scopeLabel} de la base de datos D1?\n\n✅ Tu directorio de Contactos se mantendrá 100% intacto.`
+    );
+    if (!confirmed) return;
+
+    btnDeleteAll.disabled = true;
+    try {
+      const response = await fetch('/api/pendientes', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          all: true,
+          status: selectedStatus !== 'ALL' ? selectedStatus : undefined,
+        }),
+      });
+
+      if (response.ok) {
+        targetRows.forEach((r) => r.remove());
+        recalculateStatusCounts();
+        applyFilters();
+        updateSelectionUI();
+        showSyncToast('Pendientes eliminados (Contactos intactos)');
+      } else {
+        alert('Ocurrió un error al eliminar los pendientes.');
+      }
+    } finally {
+      btnDeleteAll.disabled = false;
+    }
+  });
+
+  // Clic o Enter sobre cualquier fila de la tabla -> abre el modal (excepto WhatsApp, checkbox o botón eliminar)
+  tbody?.addEventListener('click', async (event) => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-whatsapp-link]')) return;
+    if (target.closest('[data-row-checkbox]')) return;
+
+    const deleteBtn = target.closest<HTMLButtonElement>('[data-delete-pendiente]');
+    if (deleteBtn) {
+      event.stopPropagation();
+      const id = Number(deleteBtn.dataset.deletePendiente);
+      const name = deleteBtn.dataset.deleteName || `#${id}`;
+      if (!id) return;
+
+      const confirmed = window.confirm(
+        `¿Deseas eliminar el pendiente de "${name}"?\n\n✅ El contacto se mantendrá intacto en la sección de Contactos.`
+      );
+      if (!confirmed) return;
+
+      deleteBtn.disabled = true;
+      try {
+        const response = await fetch(`/api/pendientes?id=${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+          row?.remove();
+          recalculateStatusCounts();
+          applyFilters();
+          updateSelectionUI();
+          showSyncToast(`Pendiente eliminado (Contacto intacto)`);
+        } else {
+          alert('No se pudo eliminar el pendiente.');
+        }
+      } finally {
+        deleteBtn.disabled = false;
+      }
+      return;
+    }
+
     const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
     if (!row || !row.dataset.rowRecord) return;
 
@@ -1059,6 +1292,8 @@ const statusCounts = activeStatuses.reduce(
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const target = event.target as HTMLElement;
     if (target.closest('[data-whatsapp-link]')) return;
+    if (target.closest('[data-row-checkbox]')) return;
+    if (target.closest('[data-delete-pendiente]')) return;
     const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
     if (!row || !row.dataset.rowRecord) return;
 
@@ -1192,13 +1427,18 @@ const statusCounts = activeStatuses.reduce(
     });
   }
 
-  // Eliminar cliente desde dentro del modal
+  // Eliminar pendiente desde dentro del modal (manteniendo el contacto intacto)
   btnDeleteModal?.addEventListener('click', async () => {
     const idVal = fId?.value?.trim();
     if (!idVal) return;
     const id = Number(idVal);
+    const nombre = fContacto?.value?.trim() || `#${id}`;
 
-    if (!window.confirm(`¿Estás seguro de eliminar el cliente #${id} de la base de datos D1?`)) {
+    if (
+      !window.confirm(
+        `¿Estás seguro de eliminar el pendiente de "${nombre}" de la base de datos D1?\n\n✅ El contacto en el directorio de Contactos se mantendrá intacto.`
+      )
+    ) {
       return;
     }
 
@@ -1210,8 +1450,9 @@ const statusCounts = activeStatuses.reduce(
         row?.remove();
         recalculateStatusCounts();
         applyFilters();
+        updateSelectionUI();
         modal?.close();
-        showSyncToast(`Cliente #${id} eliminado de D1`);
+        showSyncToast(`Pendiente #${id} eliminado (Contacto intacto)`);
       }
     } finally {
       btnDeleteModal.disabled = false;
