@@ -4,6 +4,7 @@ import Header from '@/components/common/Header.astro';
 import PagosPanel from '@/components/pagos/PagosPanel.astro';
 import { getAllPagos, getDatabase } from '@/utils/db';
 
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 const db = getDatabase(Astro.locals);
 const pagos = await getAllPagos(db);
 ---

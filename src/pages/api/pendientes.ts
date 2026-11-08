@@ -4,19 +4,25 @@ import type { NewPendienteRecord } from '@/types';
 import {
   createPendiente,
   deletePendiente,
+  getAllEstatus,
   getAllPendientes,
   getDatabase,
   updatePendiente,
 } from '@/utils/db';
 
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+};
+
 async function checkValidStatus(db: D1Database, value: unknown): Promise<boolean> {
   if (typeof value !== 'string' || !value.trim()) return false;
-  if (ALL_PENDIENTE_STATUS_LIST.includes(value as any)) return true;
-  const match = await db
-    .prepare('SELECT id FROM estatus WHERE nombre = ? OR codigo = ? LIMIT 1')
-    .bind(value.trim(), value.trim())
-    .first();
-  return Boolean(match);
+  const trimmed = value.trim();
+  if (ALL_PENDIENTE_STATUS_LIST.includes(trimmed as any)) return true;
+  const allEstatus = await getAllEstatus(db);
+  return allEstatus.some(
+    (e) => e.nombre.toLowerCase() === trimmed.toLowerCase() || e.codigo.toLowerCase() === trimmed.toLowerCase()
+  );
 }
 
 export const GET: APIRoute = async ({ locals }) => {
@@ -25,13 +31,13 @@ export const GET: APIRoute = async ({ locals }) => {
     const pendientes = await getAllPendientes(db);
     return new Response(JSON.stringify({ ok: true, data: pendientes }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al consultar D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -44,7 +50,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!body.contacto || !body.contacto.trim()) {
       return new Response(
         JSON.stringify({ ok: false, error: 'El nombre o contacto del cliente es obligatorio.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -52,7 +58,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!isValid || !body.status) {
       return new Response(
         JSON.stringify({ ok: false, error: 'El estatus seleccionado no es válido para Pendientes.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -73,13 +79,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     return new Response(JSON.stringify({ ok: true, data: created }), {
       status: 201,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al crear pendiente en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -93,7 +99,7 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     if (!Number.isInteger(id) || id <= 0) {
       return new Response(
         JSON.stringify({ ok: false, error: 'ID de pendiente inválido.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -102,7 +108,7 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
       if (!isValid) {
         return new Response(
           JSON.stringify({ ok: false, error: 'El estatus proporcionado no es válido para Pendientes.' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
+          { status: 400, headers: JSON_HEADERS }
         );
       }
     }
@@ -112,19 +118,19 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     if (!updated) {
       return new Response(
         JSON.stringify({ ok: false, error: `No se encontró el registro de pendiente con ID ${id}.` }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: JSON_HEADERS }
       );
     }
 
     return new Response(JSON.stringify({ ok: true, data: updated }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al actualizar pendiente en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -147,7 +153,7 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
     if (!id || !Number.isInteger(id) || id <= 0) {
       return new Response(
         JSON.stringify({ ok: false, error: 'ID de pendiente inválido o ausente.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -156,19 +162,19 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
     if (!ok) {
       return new Response(
         JSON.stringify({ ok: false, error: `No se pudo eliminar el pendiente con ID ${id}.` }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: JSON_HEADERS }
       );
     }
 
     return new Response(JSON.stringify({ ok: true, message: 'Pendiente eliminado con éxito.' }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al eliminar pendiente en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };

@@ -4,6 +4,7 @@ import Header from '@/components/common/Header.astro';
 import EstatusPanel from '@/components/estatus/EstatusPanel.astro';
 import { getAllEstatus, getDatabase } from '@/utils/db';
 
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 const db = getDatabase(Astro.locals);
 const estatusList = await getAllEstatus(db);
 ---

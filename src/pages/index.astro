@@ -4,6 +4,7 @@ import Header from '@/components/common/Header.astro';
 import Hero from '@/components/home/Hero.astro';
 import { getAllContactos, getAllEstatus, getAllPendientes, getDatabase } from '@/utils/db';
 
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 const db = getDatabase(Astro.locals);
 const [pendientes, estatusList, contactosList] = await Promise.all([
   getAllPendientes(db),

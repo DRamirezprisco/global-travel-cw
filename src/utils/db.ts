@@ -1,4 +1,10 @@
 import { CLIENTES_SEED } from '@/constants/clientesSeed';
+import {
+  LOCAL_MIGRATION_CONTACTOS,
+  LOCAL_MIGRATION_ESTATUS,
+  LOCAL_MIGRATION_PAGOS,
+  LOCAL_MIGRATION_PENDIENTES,
+} from '@/constants/localMigrationData';
 import type {
   ContactoRecord,
   EstatusRecord,
@@ -20,11 +26,47 @@ import {
 export { parseContactoInitial };
 
 /**
+ * URL del Worker remoto en Cloudflare conectado directamente a la base de datos D1 de producción.
+ * Cuando el proyecto se abre en entorno local (dev), todas las lecturas y escrituras se ejecutan
+ * contra el D1 remoto de este Worker para garantizar que nunca se guarde solo en local y todos
+ * los dispositivos compartan siempre exactamente la misma información.
+ */
+export const REMOTE_D1_WORKER_URL = 'https://global-travel-cw.guillermoveraghanain.workers.dev';
+
+function isLocalDevEnvironment(): boolean {
+  return Boolean(import.meta.env?.DEV);
+}
+
+async function remoteApiFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<{ ok: boolean; data?: T; exists?: boolean; error?: string; message?: string }> {
+  const res = await fetch(`${REMOTE_D1_WORKER_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      ...(options?.headers || {}),
+    },
+  });
+  return (await res.json()) as {
+    ok: boolean;
+    data?: T;
+    exists?: boolean;
+    error?: string;
+    message?: string;
+  };
+}
+
+/**
  * Obtiene la instancia de Cloudflare D1 Database desde Astro.locals.
  */
 export function getDatabase(locals: App.Locals): D1Database {
   const db = locals.runtime?.env?.DB;
   if (!db) {
+    if (isLocalDevEnvironment()) {
+      return {} as D1Database;
+    }
     throw new Error('Cloudflare D1 binding "DB" no está disponible en el entorno actual.');
   }
   return db;
@@ -38,23 +80,26 @@ const PAYMENT_STATUSES = [
 ];
 
 export const INITIAL_ESTATUS_SEED: Array<{ nombre: string; codigo: string; color: string }> = [
-  { nombre: 'Pendiente Cotizacion', codigo: 'pendiente-cotizacion', color: '#ff0000' },
-  { nombre: 'Cotizacion Enviada', codigo: 'cotizacion-enviada', color: '#ffc000' },
-  { nombre: 'Reserva por 24h', codigo: 'reserva-24h', color: '#00b0f0' },
-  { nombre: 'Reserva Emitida', codigo: 'reserva-emitida', color: '#00ff00' },
-  { nombre: 'Visas', codigo: 'visas', color: '#cc3399' },
-  { nombre: 'Consultas', codigo: 'consultas', color: '#669900' },
-  { nombre: 'Cambio Tickets', codigo: 'cambio-tickets', color: '#ff0066' },
-  { nombre: 'Finalizado', codigo: 'finalizado', color: '#059669' },
+  { nombre: 'Pendiente Cotizacion', codigo: 'pc', color: '#dd0303' },
+  { nombre: 'Cotizacion Enviada', codigo: 'ce', color: '#1e3a8a' },
+  { nombre: 'Reserva por 24h', codigo: 'r24', color: '#0298cf' },
+  { nombre: 'Reserva Emitida', codigo: 're', color: '#17b080' },
+  { nombre: 'Visas', codigo: 'v', color: '#ee17a6' },
+  { nombre: 'Consultas', codigo: 'c', color: '#dcac1e' },
+  { nombre: 'Cambio Tickets', codigo: 'ct', color: '#ea580c' },
+  { nombre: 'Finalizado', codigo: 'f', color: '#6f7680' },
 ];
 
 let dbInitPromise: Promise<void> | null = null;
 
 /**
- * Asegura la creación e inicialización de las tablas `estatus`, `pendientes`, `pagos` y `contactos` en Cloudflare D1.
+ * Asegura la creación, inicialización y migración de las tablas `estatus`, `pendientes`, `pagos` y `contactos` en Cloudflare D1.
  * Utiliza una promesa compartida para evitar condiciones de carrera en llamadas concurrentes (como Promise.all en SSR).
  */
 export function ensureDatabaseInitialized(db: D1Database): Promise<void> {
+  if (isLocalDevEnvironment()) {
+    return Promise.resolve();
+  }
   if (!dbInitPromise) {
     dbInitPromise = runDatabaseInitialization(db).catch((err) => {
       dbInitPromise = null; // Permitir reintento en caso de error
@@ -62,6 +107,179 @@ export function ensureDatabaseInitialized(db: D1Database): Promise<void> {
     });
   }
   return dbInitPromise;
+}
+
+async function applyLocalDataMigrationToD1(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS _app_migrations (
+        key TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    )
+    .run();
+
+  const migrationKey = 'sync_local_to_d1_2026_11_v1';
+  const alreadyApplied = await db
+    .prepare('SELECT key FROM _app_migrations WHERE key = ? LIMIT 1')
+    .bind(migrationKey)
+    .first<{ key: string }>();
+
+  if (alreadyApplied) {
+    return;
+  }
+
+  // 1. Sincronizar los 8 estatus personalizados desde local
+  for (const est of LOCAL_MIGRATION_ESTATUS) {
+    await db
+      .prepare(
+        `INSERT INTO estatus (id, nombre, codigo, color, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           nombre = excluded.nombre,
+           codigo = excluded.codigo,
+           color = excluded.color,
+           updated_at = excluded.updated_at`
+      )
+      .bind(est.id, est.nombre, est.codigo, est.color, est.updated_at || "datetime('now')")
+      .run();
+  }
+
+  // 2. Sincronizar todos los pendientes desde local
+  const upsertPendienteStmt = db.prepare(
+    `INSERT INTO pendientes (
+      id, contacto, status, status_id, codigo, aerolinea, localizador, apellidos,
+      fecha_gestion, solicitud_vuelo, observacion, checkin, monto, origen_tabla, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      contacto = excluded.contacto,
+      status = excluded.status,
+      status_id = excluded.status_id,
+      codigo = excluded.codigo,
+      aerolinea = excluded.aerolinea,
+      localizador = excluded.localizador,
+      apellidos = excluded.apellidos,
+      fecha_gestion = excluded.fecha_gestion,
+      solicitud_vuelo = excluded.solicitud_vuelo,
+      observacion = excluded.observacion,
+      checkin = excluded.checkin,
+      monto = excluded.monto,
+      origen_tabla = excluded.origen_tabla,
+      updated_at = excluded.updated_at`
+  );
+
+  const pendientesBatch = LOCAL_MIGRATION_PENDIENTES.map((p) =>
+    upsertPendienteStmt.bind(
+      p.id,
+      p.contacto,
+      p.status,
+      p.status_id ?? null,
+      p.codigo || '-',
+      p.aerolinea || '-',
+      p.localizador || '-',
+      p.apellidos || '-',
+      p.fecha_gestion || '-',
+      p.solicitud_vuelo || '-',
+      p.observacion || '-',
+      p.checkin || '-',
+      p.monto || '-',
+      p.origen_tabla || '-',
+      p.updated_at || "datetime('now')"
+    )
+  );
+  if (pendientesBatch.length > 0) {
+    await db.batch(pendientesBatch);
+  }
+
+  // 3. Sincronizar todos los pagos desde local
+  const upsertPagoStmt = db.prepare(
+    `INSERT INTO pagos (
+      id, contacto, status, codigo, fecha_gestion, solicitud_vuelo,
+      observacion, checkin, monto, moneda, origen_tabla, pendiente_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      contacto = excluded.contacto,
+      status = excluded.status,
+      codigo = excluded.codigo,
+      fecha_gestion = excluded.fecha_gestion,
+      solicitud_vuelo = excluded.solicitud_vuelo,
+      observacion = excluded.observacion,
+      checkin = excluded.checkin,
+      monto = excluded.monto,
+      moneda = excluded.moneda,
+      origen_tabla = excluded.origen_tabla,
+      pendiente_id = excluded.pendiente_id,
+      updated_at = excluded.updated_at`
+  );
+
+  const pagosBatch = LOCAL_MIGRATION_PAGOS.map((pg) =>
+    upsertPagoStmt.bind(
+      pg.id,
+      pg.contacto,
+      pg.status,
+      pg.codigo || '-',
+      pg.fecha_gestion || '-',
+      pg.solicitud_vuelo || '-',
+      pg.observacion || '-',
+      pg.checkin || '-',
+      pg.monto || '-',
+      pg.moneda || 'Fls',
+      pg.origen_tabla || '-',
+      pg.pendiente_id ?? null,
+      pg.updated_at || "datetime('now')"
+    )
+  );
+  if (pagosBatch.length > 0) {
+    await db.batch(pagosBatch);
+  }
+
+  // 4. Sincronizar todos los contactos desde local
+  const upsertContactoStmt = db.prepare(
+    `INSERT INTO contactos (
+      contacto, telefono, email, nombres, apellidos,
+      fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
+      genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(contacto) DO UPDATE SET
+      telefono = excluded.telefono,
+      email = excluded.email,
+      nombres = excluded.nombres,
+      apellidos = excluded.apellidos,
+      fecha_nacimiento = excluded.fecha_nacimiento,
+      numero_pasaporte = excluded.numero_pasaporte,
+      nacionalidad_pasaporte = excluded.nacionalidad_pasaporte,
+      genero = excluded.genero,
+      fecha_emision_pasaporte = excluded.fecha_emision_pasaporte,
+      fecha_vencimiento_pasaporte = excluded.fecha_vencimiento_pasaporte,
+      updated_at = excluded.updated_at`
+  );
+
+  const contactosBatch = LOCAL_MIGRATION_CONTACTOS.map((c) =>
+    upsertContactoStmt.bind(
+      c.contacto,
+      c.telefono || '-',
+      c.email || '-',
+      c.nombres || '-',
+      c.apellidos || '-',
+      c.fecha_nacimiento || '-',
+      c.numero_pasaporte || '-',
+      c.nacionalidad_pasaporte || '-',
+      c.genero || '-',
+      c.fecha_emision_pasaporte || '-',
+      c.fecha_vencimiento_pasaporte || '-',
+      c.created_at || "datetime('now')",
+      c.updated_at || "datetime('now')"
+    )
+  );
+  if (contactosBatch.length > 0) {
+    await db.batch(contactosBatch);
+  }
+
+  await db
+    .prepare("INSERT INTO _app_migrations (key, applied_at) VALUES (?, datetime('now'))")
+    .bind(migrationKey)
+    .run();
 }
 
 async function runDatabaseInitialization(db: D1Database): Promise<void> {
@@ -294,7 +512,6 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
     }
 
     // 6. Asegurar que todo pago existente tenga un pendiente_id relacionado.
-    // Para los pagos históricos que no tienen pendiente definido, se crea un pendiente en 'Finalizado' (oculto en filtros superiores).
     try {
       const unlinkedPagos = await db
         .prepare('SELECT * FROM pagos WHERE pendiente_id IS NULL OR pendiente_id = 0')
@@ -302,7 +519,7 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
 
       if (unlinkedPagos.results && unlinkedPagos.results.length > 0) {
         const finalizadoEstatus = await db
-          .prepare("SELECT id FROM estatus WHERE nombre = 'Finalizado' OR codigo = 'finalizado' LIMIT 1")
+          .prepare("SELECT id FROM estatus WHERE nombre = 'Finalizado' OR codigo = 'finalizado' OR codigo = 'f' LIMIT 1")
           .first<{ id: number }>();
         const finalizadoId = finalizadoEstatus ? finalizadoEstatus.id : null;
 
@@ -401,6 +618,9 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
         }
       } catch {}
     }
+
+    // 8. Ejecutar migración única de la data local (Oct 30) hacia D1 remoto
+    await applyLocalDataMigrationToD1(db);
   } catch (error) {
     console.error('Error inicializando base de datos D1:', error);
     throw error;
@@ -414,6 +634,10 @@ export const ensureClientesInitialized = ensureDatabaseInitialized;
 // ==========================================
 
 export async function getAllEstatus(db: D1Database): Promise<EstatusRecord[]> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<EstatusRecord[]>('/api/estatus');
+    return res.data ?? [];
+  }
   await ensureDatabaseInitialized(db);
   const { results } = await db
     .prepare(
@@ -429,6 +653,10 @@ export async function getAllEstatus(db: D1Database): Promise<EstatusRecord[]> {
 }
 
 export async function getEstatusById(db: D1Database, id: number): Promise<EstatusRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const all = await getAllEstatus(db);
+    return all.find((e) => e.id === id) ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare(
@@ -448,6 +676,14 @@ export async function createEstatus(
   db: D1Database,
   data: NewEstatusRecord
 ): Promise<EstatusRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<EstatusRecord>('/api/estatus', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al crear estatus en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
 
   const nombre = data.nombre.trim();
@@ -479,6 +715,14 @@ export async function updateEstatus(
   id: number,
   fields: Partial<NewEstatusRecord>
 ): Promise<EstatusRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<EstatusRecord>('/api/estatus', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, ...fields }),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al actualizar estatus en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
 
   const existing = await getEstatusById(db, id);
@@ -519,6 +763,12 @@ export async function deleteEstatus(
   db: D1Database,
   id: number
 ): Promise<{ success: boolean; error?: string }> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<unknown>(`/api/estatus?id=${id}`, {
+      method: 'DELETE',
+    });
+    return { success: Boolean(res.ok), error: res.error };
+  }
   await ensureDatabaseInitialized(db);
 
   const existing = await getEstatusById(db, id);
@@ -547,6 +797,10 @@ export async function deleteEstatus(
 // ==========================================
 
 export async function getAllPendientes(db: D1Database): Promise<PendienteRecord[]> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PendienteRecord[]>('/api/pendientes');
+    return res.data ?? [];
+  }
   await ensureDatabaseInitialized(db);
   const { results } = await db
     .prepare(
@@ -563,6 +817,14 @@ export async function createPendiente(
   db: D1Database,
   data: NewPendienteRecord
 ): Promise<PendienteRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PendienteRecord>('/api/pendientes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al crear pendiente en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
 
   let statusId = data.status_id;
@@ -613,6 +875,14 @@ export async function updatePendiente(
   id: number,
   fields: Partial<NewPendienteRecord> & { status?: PendienteStatus | string; status_id?: number | null }
 ): Promise<PendienteRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PendienteRecord>('/api/pendientes', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, ...fields }),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al actualizar pendiente en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const existing = await db
     .prepare('SELECT * FROM pendientes WHERE id = ?')
@@ -712,6 +982,12 @@ export async function updatePendiente(
 }
 
 export async function deletePendiente(db: D1Database, id: number): Promise<boolean> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<unknown>(`/api/pendientes?id=${id}`, {
+      method: 'DELETE',
+    });
+    return Boolean(res.ok);
+  }
   await ensureDatabaseInitialized(db);
   const res = await db.prepare('DELETE FROM pendientes WHERE id = ?').bind(id).run();
   return Boolean(res.success);
@@ -732,6 +1008,7 @@ export const deleteCliente = deletePendiente;
  * De ser así, se pasan automáticamente al estatus 'Demorados'.
  */
 export async function checkAndSyncDemorados(db: D1Database): Promise<number> {
+  if (isLocalDevEnvironment()) return 0;
   try {
     const { results } = await db
       .prepare("SELECT id, fecha_gestion, updated_at FROM pagos WHERE status = 'Pendiente'")
@@ -765,6 +1042,7 @@ export async function syncPagoFromPendiente(
   db: D1Database,
   pendienteId: number
 ): Promise<PagoRecord | null> {
+  if (isLocalDevEnvironment()) return null;
   const pendiente = await db
     .prepare('SELECT * FROM pendientes WHERE id = ?')
     .bind(pendienteId)
@@ -837,6 +1115,10 @@ export async function syncPagoFromPendiente(
 }
 
 export async function getAllPagos(db: D1Database): Promise<PagoRecord[]> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PagoRecord[]>('/api/pagos');
+    return res.data ?? [];
+  }
   await ensureDatabaseInitialized(db);
   // Sincroniza pagos pendientes vencidos (+20 días) antes de responder
   await checkAndSyncDemorados(db);
@@ -851,6 +1133,14 @@ export async function createPago(
   db: D1Database,
   data: NewPagoRecord
 ): Promise<PagoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PagoRecord>('/api/pagos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al crear pago en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const moneda = data.moneda?.trim() || (data.monto && (data.monto.includes('$') || data.monto.toLowerCase().includes('usd')) ? 'USD' : 'Fls');
   const result = await db
@@ -883,6 +1173,14 @@ export async function updatePago(
   id: number,
   fields: Partial<NewPagoRecord> & { status?: PagoStatus; pendiente_id?: number | null }
 ): Promise<PagoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<PagoRecord>('/api/pagos', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, ...fields }),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al actualizar pago en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const existing = await db
     .prepare('SELECT * FROM pagos WHERE id = ?')
@@ -950,6 +1248,12 @@ export async function updatePago(
 }
 
 export async function deletePago(db: D1Database, id: number): Promise<boolean> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<unknown>(`/api/pagos?id=${id}`, {
+      method: 'DELETE',
+    });
+    return Boolean(res.ok);
+  }
   await ensureDatabaseInitialized(db);
   const res = await db.prepare('DELETE FROM pagos WHERE id = ?').bind(id).run();
   return Boolean(res.success);
@@ -960,6 +1264,10 @@ export async function deletePago(db: D1Database, id: number): Promise<boolean> {
 // ==========================================
 
 export async function getAllContactos(db: D1Database): Promise<ContactoRecord[]> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<ContactoRecord[]>('/api/contactos');
+    return res.data ?? [];
+  }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos ORDER BY contacto COLLATE NOCASE ASC')
@@ -968,6 +1276,10 @@ export async function getAllContactos(db: D1Database): Promise<ContactoRecord[]>
 }
 
 export async function getContactoById(db: D1Database, id: number): Promise<ContactoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<ContactoRecord>(`/api/contactos?id=${id}`);
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos WHERE id = ?')
@@ -980,6 +1292,12 @@ export async function getContactoByName(
   db: D1Database,
   contacto: string
 ): Promise<ContactoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<ContactoRecord>(
+      `/api/contactos?check=${encodeURIComponent(contacto.trim())}`
+    );
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos WHERE LOWER(contacto) = LOWER(?) LIMIT 1')
@@ -992,6 +1310,14 @@ export async function createContacto(
   db: D1Database,
   data: NewContactoRecord
 ): Promise<ContactoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<ContactoRecord>('/api/contactos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al crear contacto en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const contactoName = data.contacto ? data.contacto.trim() : '';
   if (!contactoName) return null;
@@ -1034,6 +1360,14 @@ export async function updateContacto(
   id: number,
   fields: Partial<NewContactoRecord>
 ): Promise<ContactoRecord | null> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<ContactoRecord>('/api/contactos', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, ...fields }),
+    });
+    if (!res.ok) throw new Error(res.error || 'Error al actualizar contacto en D1 remoto');
+    return res.data ?? null;
+  }
   await ensureDatabaseInitialized(db);
   const existing = await getContactoById(db, id);
   if (!existing) return null;
@@ -1105,6 +1439,12 @@ export async function updateContacto(
 }
 
 export async function deleteContacto(db: D1Database, id: number): Promise<boolean> {
+  if (isLocalDevEnvironment()) {
+    const res = await remoteApiFetch<unknown>(`/api/contactos?id=${id}`, {
+      method: 'DELETE',
+    });
+    return Boolean(res.ok);
+  }
   await ensureDatabaseInitialized(db);
   const result = await db.prepare('DELETE FROM contactos WHERE id = ?').bind(id).run();
   return Boolean(result.success);

@@ -9,19 +9,24 @@ import {
   updateEstatus,
 } from '@/utils/db';
 
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+};
+
 export const GET: APIRoute = async ({ locals }) => {
   try {
     const db = getDatabase(locals);
     const estatusList = await getAllEstatus(db);
     return new Response(JSON.stringify({ ok: true, data: estatusList }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al consultar estatus en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -35,7 +40,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!nombre) {
       return new Response(
         JSON.stringify({ ok: false, error: 'El nombre del estatus es obligatorio.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -52,15 +57,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const color = body.color?.trim() || '#1e3a8a';
 
     // Verificar si el código ya existe
-    const existing = await db
-      .prepare('SELECT id FROM estatus WHERE codigo = ? LIMIT 1')
-      .bind(codigo)
-      .first<{ id: number }>();
+    const allEstatus = await getAllEstatus(db);
+    const existing = allEstatus.find((e) => e.codigo.toLowerCase() === codigo);
 
     if (existing) {
       return new Response(
         JSON.stringify({ ok: false, error: `Ya existe un estatus con el código "${codigo}".` }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -72,13 +75,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     return new Response(JSON.stringify({ ok: true, data: created }), {
       status: 201,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al crear estatus en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -92,7 +95,7 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     if (!Number.isInteger(id) || id <= 0) {
       return new Response(
         JSON.stringify({ ok: false, error: 'ID de estatus inválido.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -100,22 +103,20 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     if (!existing) {
       return new Response(
         JSON.stringify({ ok: false, error: 'Estatus no encontrado.' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: JSON_HEADERS }
       );
     }
 
     // Si se actualiza el código, verificar unicidad
     if (body.codigo && body.codigo.trim().toLowerCase() !== existing.codigo) {
       const slug = body.codigo.trim().toLowerCase();
-      const codeCheck = await db
-        .prepare('SELECT id FROM estatus WHERE codigo = ? AND id != ? LIMIT 1')
-        .bind(slug, id)
-        .first<{ id: number }>();
+      const allEstatus = await getAllEstatus(db);
+      const codeCheck = allEstatus.find((e) => e.codigo.toLowerCase() === slug && e.id !== id);
 
       if (codeCheck) {
         return new Response(
           JSON.stringify({ ok: false, error: `Ya existe otro estatus con el código "${slug}".` }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
+          { status: 400, headers: JSON_HEADERS }
         );
       }
     }
@@ -124,13 +125,13 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
 
     return new Response(JSON.stringify({ ok: true, data: updated }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al actualizar estatus en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
@@ -153,7 +154,7 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
     if (!id || !Number.isInteger(id) || id <= 0) {
       return new Response(
         JSON.stringify({ ok: false, error: 'ID de estatus inválido o ausente.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
@@ -162,19 +163,19 @@ export const DELETE: APIRoute = async ({ request, locals, url }) => {
     if (!result.success) {
       return new Response(
         JSON.stringify({ ok: false, error: result.error || 'No se pudo eliminar el estatus.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: JSON_HEADERS }
       );
     }
 
     return new Response(JSON.stringify({ ok: true, message: 'Estatus eliminado con éxito.' }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al eliminar estatus en D1';
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: JSON_HEADERS,
     });
   }
 };
