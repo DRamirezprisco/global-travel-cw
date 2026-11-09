@@ -22,6 +22,8 @@ export interface ReportSectionTable {
 export interface BuiltOperationalReport {
   mainTitle: string;
   subTitle: string;
+  emissionDateLong: string;
+  responsibleName: string;
   dateSlug: string;
   sections: ReportSectionTable[];
 }
@@ -114,13 +116,47 @@ function detectCurrency(rawMonto: string | undefined, rawMoneda?: string): 'USD'
   return 'Fls';
 }
 
-function getTodayDisplayAndSlug(): { display: string; slug: string } {
-  const now = new Date();
+const DAYS_ES = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+];
+
+const MONTHS_ES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+
+function getTodayDisplayAndSlug(refDate?: Date): {
+  display: string;
+  longSpanish: string;
+  slug: string;
+} {
+  const now = refDate && !Number.isNaN(refDate.getTime()) ? refDate : new Date();
   const dd = String(now.getDate()).padStart(2, '0');
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const yyyy = String(now.getFullYear());
+  const dayName = DAYS_ES[now.getDay()];
+  const monthName = MONTHS_ES[now.getMonth()];
+  const longSpanish = `${dayName}, ${now.getDate()} de ${monthName} de ${yyyy}`;
+
   return {
     display: `${dd}/${mm}/${yyyy}`,
+    longSpanish,
     slug: `${dd}-${mm}-${yyyy}`,
   };
 }
@@ -267,8 +303,12 @@ function buildFilterSectionForStatus(
  */
 export function buildOperationalReport(data: ReportDataPayload): BuiltOperationalReport {
   const { pendientes = [], pagos = [], estatus = [] } = data;
-  const { display: emissionDate, slug: dateSlug } = getTodayDisplayAndSlug();
   const refNow = new Date();
+  const {
+    longSpanish: emissionDateLong,
+    slug: dateSlug,
+  } = getTodayDisplayAndSlug(refNow);
+  const responsibleName = 'Daniela Ramírez';
 
   const cotizacionesPendList = pendientes.filter((p) => p.status === 'Pendiente Cotizacion');
   const cotizacionesEnvList = pendientes.filter((p) => p.status === 'Cotizacion Enviada');
@@ -554,8 +594,10 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
   };
 
   return {
-    mainTitle: 'GLOBAL TRAVEL CW - RESUMEN OPERATIVO DE WHATSAPP',
-    subTitle: `Fecha de Emisión: ${emissionDate} | Responsable: Daniela Ramírez`,
+    mainTitle: 'REPORTE STATUS - GLOBAL TRAVEL CW. WILLEMSTAD. CURACAO',
+    subTitle: `Fecha Emisión: ${emissionDateLong} | Responsable: ${responsibleName}`,
+    emissionDateLong,
+    responsibleName,
     dateSlug,
     sections: [
       sectionResumen,
@@ -966,12 +1008,79 @@ function wrapTextToWidth(text: string, maxChars: number): string[] {
   return lines.slice(0, 4);
 }
 
-function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
+interface PdfEmbeddedLogo {
+  hexStream: string;
+  width: number;
+  height: number;
+}
+
+async function loadLogoJpegForPdf(): Promise<PdfEmbeddedLogo | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const natW = img.naturalWidth || 1376;
+        const natH = img.naturalHeight || 768;
+        const targetWidth = 550;
+        const targetHeight = Math.max(1, Math.round((natH / natW) * targetWidth));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+
+        // Fondo blanco para que las áreas transparentes del logo se integren al papel blanco
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        const commaIdx = dataUrl.indexOf(',');
+        if (commaIdx === -1) {
+          resolve(null);
+          return;
+        }
+
+        const base64 = dataUrl.slice(commaIdx + 1);
+        const binaryStr = atob(base64);
+        let hex = '';
+        for (let i = 0; i < binaryStr.length; i++) {
+          hex += binaryStr.charCodeAt(i).toString(16).padStart(2, '0');
+        }
+        hex += '>';
+
+        resolve({
+          hexStream: hex,
+          width: targetWidth,
+          height: targetHeight,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/img/logo.webp';
+  });
+}
+
+function buildPdfBytes(
+  report: BuiltOperationalReport,
+  logoImage?: PdfEmbeddedLogo | null
+): Uint8Array {
   const pageWidth = 842;
   const pageHeight = 595;
   const marginX = 28;
   const usableWidth = pageWidth - marginX * 2;
-  const topY = pageHeight - 32;
+  const topY = pageHeight - 28;
   const bottomLimitY = 38;
 
   const pageStreams: string[][] = [];
@@ -986,27 +1095,85 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
     cursorY = topY;
 
     if (isFirstPage) {
-      currentStream.push('0.118 0.227 0.541 rg');
-      currentStream.push(`${marginX} ${cursorY - 26} ${usableWidth} 26 re f`);
-      currentStream.push('1 1 1 rg');
-      currentStream.push(
-        `BT /F2 12 Tf ${marginX + 10} ${cursorY - 17} Td (${toWinAnsiSafePdfString(report.mainTitle)}) Tj ET`
-      );
-      cursorY -= 26;
+      // 1. Título centrado superior: REPORTE STATUS
+      const headerTitle = 'REPORTE STATUS';
+      const titleFontSize = 18;
+      const approxTitleWidth = headerTitle.length * titleFontSize * 0.6;
+      const titleX = (pageWidth - approxTitleWidth) / 2;
+      const titleY = cursorY - 16;
 
-      currentStream.push('0.937 0.965 1 rg');
-      currentStream.push(`${marginX} ${cursorY - 18} ${usableWidth} 18 re f`);
-      currentStream.push('0.118 0.227 0.541 rg');
+      currentStream.push('0 0 0 rg');
       currentStream.push(
-        `BT /F2 8.5 Tf ${marginX + 10} ${cursorY - 12} Td (${toWinAnsiSafePdfString(report.subTitle)}) Tj ET`
+        `BT /F4 ${titleFontSize} Tf ${titleX.toFixed(1)} ${titleY} Td (${toWinAnsiSafePdfString(headerTitle)}) Tj ET`
       );
-      cursorY -= 28;
+
+      // 2. Bloque de Logo a la izquierda + Datos de la agencia a la derecha
+      const logoW = 162;
+      const logoH = 90;
+      const logoX = marginX + 4;
+      const logoTopY = titleY - 6;
+      const logoBottomY = logoTopY - logoH;
+
+      if (logoImage) {
+        currentStream.push('q');
+        currentStream.push(
+          `${logoW} 0 0 ${logoH} ${logoX} ${logoBottomY} cm`
+        );
+        currentStream.push('/Logo Do');
+        currentStream.push('Q');
+      } else {
+        // Respaldo vectorial en caso de que no cargue la imagen
+        currentStream.push('0 0 0 rg');
+        currentStream.push(
+          `BT /F2 11 Tf ${logoX} ${logoBottomY + 42} Td (G L O B A L) Tj ET`
+        );
+        currentStream.push(
+          `BT /F2 26 Tf ${logoX} ${logoBottomY + 14} Td (TRAVEL) Tj ET`
+        );
+        currentStream.push(
+          `BT /F1 9 Tf ${logoX + 120} ${logoBottomY + 14} Td (C W) Tj ET`
+        );
+      }
+
+      const textX = logoX + logoW + 14;
+
+      // Línea 1: GLOBAL TRAVEL CW. WILLEMSTAD. CURACAO (Azul #2F5496, Negrita Cursiva)
+      currentStream.push('0.184 0.329 0.588 rg');
+      currentStream.push(
+        `BT /F3 13.5 Tf ${textX} ${logoBottomY + 40} Td (${toWinAnsiSafePdfString('GLOBAL TRAVEL CW. WILLEMSTAD. CURACAO')}) Tj ET`
+      );
+
+      // Línea 2: Fecha Emisión: <Día, DD de Mes de YYYY>
+      currentStream.push('0 0 0 rg');
+      currentStream.push(
+        `BT /F4 11.5 Tf ${textX} ${logoBottomY + 22} Td (${toWinAnsiSafePdfString('Fecha Emisión: ')}) Tj /F5 11.5 Tf (${toWinAnsiSafePdfString(report.emissionDateLong)}) Tj ET`
+      );
+
+      // Línea 3: Responsable: Daniela Ramírez
+      currentStream.push(
+        `BT /F4 11.5 Tf ${textX} ${logoBottomY + 5} Td (${toWinAnsiSafePdfString('Responsable')}) Tj 0 0.125 0.376 rg (: ) Tj 0 0 0 rg /F5 11.5 Tf (${toWinAnsiSafePdfString(report.responsibleName)}) Tj ET`
+      );
+
+      // 3. Línea divisoria horizontal negra en la parte inferior del encabezado
+      const lineY = logoBottomY - 8;
+      currentStream.push('0 0 0 RG 0.8 w');
+      currentStream.push(`${marginX} ${lineY} m ${pageWidth - marginX} ${lineY} l S`);
+
+      cursorY = lineY - 14;
     } else {
-      currentStream.push('0.118 0.227 0.541 rg');
+      // Encabezado compacto en páginas siguientes
+      currentStream.push('0.184 0.329 0.588 rg');
       currentStream.push(
-        `BT /F2 8 Tf ${marginX} ${cursorY - 8} Td (${toWinAnsiSafePdfString(report.mainTitle + ' | ' + report.subTitle)}) Tj ET`
+        `BT /F3 8.5 Tf ${marginX} ${cursorY - 8} Td (${toWinAnsiSafePdfString('REPORTE STATUS - GLOBAL TRAVEL CW. WILLEMSTAD. CURACAO')}) Tj ET`
       );
-      cursorY -= 18;
+      currentStream.push('0 0 0 rg');
+      currentStream.push(
+        `BT /F4 8 Tf ${marginX + 310} ${cursorY - 8} Td (${toWinAnsiSafePdfString('Fecha Emisión: ')}) Tj /F5 8 Tf (${toWinAnsiSafePdfString(report.emissionDateLong + '  |  ')}) Tj /F4 8 Tf (${toWinAnsiSafePdfString('Responsable: ')}) Tj /F5 8 Tf (${toWinAnsiSafePdfString(report.responsibleName)}) Tj ET`
+      );
+      const subLineY = cursorY - 13;
+      currentStream.push('0 0 0 RG 0.5 w');
+      currentStream.push(`${marginX} ${subLineY} m ${pageWidth - marginX} ${subLineY} l S`);
+      cursorY -= 22;
     }
   }
 
@@ -1150,6 +1317,25 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
   objects.push(
     '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n'
   );
+  objects.push(
+    '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>\nendobj\n'
+  );
+  objects.push(
+    '6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>\nendobj\n'
+  );
+  objects.push(
+    '7 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>\nendobj\n'
+  );
+
+  let logoObjNum: number | null = null;
+  if (logoImage && logoImage.hexStream) {
+    logoObjNum = objects.length + 1;
+    objects.push(
+      `${logoObjNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${logoImage.width} /Height ${logoImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${logoImage.hexStream.length} >>\nstream\n${logoImage.hexStream}\nendstream\nendobj\n`
+    );
+  }
+
+  const xObjectResource = logoObjNum ? ` /XObject << /Logo ${logoObjNum} 0 R >>` : '';
 
   const pageObjNums: number[] = [];
   for (let p = 0; p < totalPages; p++) {
@@ -1161,7 +1347,7 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
       `${contentObjNum} 0 obj\n<< /Length ${streamContent.length} >>\nstream\n${streamContent}\nendstream\nendobj\n`
     );
     objects.push(
-      `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj\n`
+      `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R /F5 7 0 R >>${xObjectResource} >> /Contents ${contentObjNum} 0 R >>\nendobj\n`
     );
     pageObjNums.push(pageObjNum);
   }
@@ -1229,8 +1415,11 @@ export async function downloadOperationalReportExcel(): Promise<void> {
 }
 
 export async function downloadOperationalReportPdf(): Promise<void> {
-  const report = await fetchLiveReportData();
-  const pdfBytes = buildPdfBytes(report);
+  const [report, logoImage] = await Promise.all([
+    fetchLiveReportData(),
+    loadLogoJpegForPdf(),
+  ]);
+  const pdfBytes = buildPdfBytes(report, logoImage);
   triggerBlobDownload(
     pdfBytes,
     `Reporte_Operativo_Global_Travel_CW_${report.dateSlug}.pdf`,
