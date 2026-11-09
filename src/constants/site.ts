@@ -8,8 +8,8 @@ export const SITE_META: SiteMeta = {
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { id: 'pendientes', label: 'Pendientes', href: '/' },
   { id: 'pendientes-hoy', label: 'Pendientes Hoy', href: '/pendientes-hoy' },
+  { id: 'pendientes', label: 'Pendientes', href: '/' },
   { id: 'pagos', label: 'Pagos', href: '/pagos' },
   { id: 'contactos', label: 'Contactos', href: '/contactos' },
   { id: 'estatus', label: 'Estatus', href: '/estatus' },

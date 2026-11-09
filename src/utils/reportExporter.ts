@@ -1,4 +1,5 @@
 import type { EstatusRecord, PagoRecord, PendienteRecord } from '@/types';
+import { evaluatePendienteForHoy } from '@/utils/flightDateHelpers';
 import { parseMontoNumeric } from '@/utils/pagoHelpers';
 
 export interface ReportDataPayload {
@@ -9,6 +10,9 @@ export interface ReportDataPayload {
 }
 
 export interface ReportSectionTable {
+  /** Nombre corto para la pestaña (hoja) de Excel (máximo 31 caracteres) */
+  sheetName: string;
+  /** Título completo que encabeza esa pestaña / sección */
   title: string;
   headers: string[];
   rows: string[][];
@@ -121,23 +125,170 @@ function getTodayDisplayAndSlug(): { display: string; slug: string } {
   };
 }
 
+function sanitizeSheetName(rawName: string, usedNames: Set<string>): string {
+  let clean = String(rawName || 'Hoja')
+    .replace(/[\\/?*:\[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) clean = 'Hoja';
+  let candidate = clean.slice(0, 31).trim();
+  let suffix = 2;
+  while (usedNames.has(candidate.toLowerCase())) {
+    const base = clean.slice(0, 27).trim();
+    candidate = `${base} (${suffix})`;
+    suffix++;
+  }
+  usedNames.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function buildFilterSectionForStatus(
+  statusName: string,
+  items: PendienteRecord[]
+): ReportSectionTable {
+  if (statusName === 'Reserva por 24h') {
+    return {
+      sheetName: statusName,
+      title: 'RESERVAS EN ESPERA DE CONFIRMACIÓN Y PAGO (24 HRS)',
+      headers: [
+        'Contacto / Cliente',
+        'Fecha Reserva',
+        'Aerolínea / Código PNR',
+        'Fecha Vuelo / Ruta',
+        'Observaciones / Estado',
+        'Precio',
+        'Abono',
+        'Ganancia',
+        'Estatus',
+      ],
+      rows:
+        items.length > 0
+          ? items.map((item) => {
+              const parts = extractCodigoParts(item);
+              const aeroPnr =
+                parts.aerolinea !== '-' && parts.localizador !== '-'
+                  ? `${parts.aerolinea} (${parts.localizador})`
+                  : parts.aerolinea !== '-'
+                    ? parts.aerolinea
+                    : parts.localizador !== '-'
+                      ? parts.localizador
+                      : item.codigo || '-';
+              return [
+                item.contacto || '-',
+                item.fecha_gestion || '-',
+                aeroPnr,
+                item.solicitud_vuelo || '-',
+                item.observacion || '-',
+                item.monto || '-',
+                item.abono || '-',
+                item.ganancia || '-',
+                item.status,
+              ];
+            })
+          : [['Sin registros en este filtro', '-', '-', '-', '-', '-', '-', '-', statusName]],
+    };
+  }
+
+  if (statusName === 'Reserva Emitida') {
+    return {
+      sheetName: statusName,
+      title: 'VIAJES CONFIRMADOS Y MONITOREO DE CHECK-IN (RESERVA EMITIDA)',
+      headers: [
+        'Contacto / Cliente',
+        'Aerolínea',
+        'Código PNR / Apellido Pasajero',
+        'Fecha Vuelo / Ruta',
+        'Estatus Check-in',
+        'Precio',
+        'Abono',
+        'Ganancia',
+        'Notas Adicionales',
+      ],
+      rows:
+        items.length > 0
+          ? items.map((item) => {
+              const parts = extractCodigoParts(item);
+              const pnrApellido =
+                parts.localizador !== '-' && parts.apellidos !== '-'
+                  ? `${parts.localizador} / ${parts.apellidos}`
+                  : parts.localizador !== '-'
+                    ? parts.localizador
+                    : parts.apellidos !== '-'
+                      ? parts.apellidos
+                      : item.codigo || '-';
+              return [
+                item.contacto || '-',
+                parts.aerolinea,
+                pnrApellido,
+                item.solicitud_vuelo || '-',
+                item.checkin && item.checkin !== '-' ? item.checkin : 'Pendiente',
+                item.monto || '-',
+                item.abono || '-',
+                item.ganancia || '-',
+                item.observacion || '-',
+              ];
+            })
+          : [['Sin registros en este filtro', '-', '-', '-', '-', '-', '-', '-', '-']],
+    };
+  }
+
+  return {
+    sheetName: statusName,
+    title: `FILTRO DE ESTATUS: ${statusName.toUpperCase()}`,
+    headers: [
+      'Contacto / Cliente',
+      'Fecha Gestión',
+      'Ruta / Datos del Vuelo',
+      'Observación / Seguimiento',
+      'Precio',
+      'Abono',
+      'Ganancia',
+      'Estatus',
+    ],
+    rows:
+      items.length > 0
+        ? items.map((item) => [
+            item.contacto || '-',
+            item.fecha_gestion || '-',
+            item.solicitud_vuelo || '-',
+            item.observacion || '-',
+            item.monto || '-',
+            item.abono || '-',
+            item.ganancia || '-',
+            item.status,
+          ])
+        : [['Sin registros en este filtro', '-', '-', '-', '-', '-', '-', statusName]],
+  };
+}
+
 /**
- * Construye todas las secciones del Reporte Operativo de WhatsApp
- * siguiendo exactamente el formato del Excel de Global Travel CW.
+ * Construye el Reporte Operativo separando cada filtro/estatus en su propia pestaña (hoja)
+ * para que la información en Excel quede organizada por pestañas y no hacia abajo.
  */
 export function buildOperationalReport(data: ReportDataPayload): BuiltOperationalReport {
-  const { pendientes = [], pagos = [] } = data;
+  const { pendientes = [], pagos = [], estatus = [] } = data;
   const { display: emissionDate, slug: dateSlug } = getTodayDisplayAndSlug();
+  const refNow = new Date();
 
-  const cotizacionesList = pendientes.filter(
-    (p) => p.status === 'Pendiente Cotizacion' || p.status === 'Cotizacion Enviada'
-  );
+  const cotizacionesPendList = pendientes.filter((p) => p.status === 'Pendiente Cotizacion');
+  const cotizacionesEnvList = pendientes.filter((p) => p.status === 'Cotizacion Enviada');
   const reservas24hList = pendientes.filter((p) => p.status === 'Reserva por 24h');
   const emitidasList = pendientes.filter((p) => p.status === 'Reserva Emitida');
   const consultasList = pendientes.filter((p) => p.status === 'Consultas');
   const cambiosList = pendientes.filter((p) => p.status === 'Cambio Tickets');
   const visasList = pendientes.filter((p) => p.status === 'Visas');
   const finalizadosList = pendientes.filter((p) => p.status === 'Finalizado');
+
+  // Evaluar Pendientes de Hoy
+  const pendientesHoyEvaluated = pendientes
+    .map((item) => ({ item, evalHoy: evaluatePendienteForHoy(item, refNow) }))
+    .filter((entry) => entry.evalHoy.matches)
+    .sort((a, b) => {
+      if (a.evalHoy.sortTimestamp !== b.evalHoy.sortTimestamp) {
+        return a.evalHoy.sortTimestamp - b.evalHoy.sortTimestamp;
+      }
+      return a.evalHoy.secondarySortTimestamp - b.evalHoy.secondarySortTimestamp;
+    });
 
   const checkinPendienteCount = emitidasList.filter(
     (p) => (p.checkin || '').toLowerCase() !== 'completado'
@@ -148,80 +299,42 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
   ).length;
   const pagosDemoradosCount = pagos.filter((p) => p.status === 'Demorados').length;
 
-  // Otros estatus personalizados creados en la tabla estatus
-  const standardStatuses = new Set([
-    'Pendiente Cotizacion',
-    'Cotizacion Enviada',
-    'Reserva por 24h',
-    'Reserva Emitida',
-    'Consultas',
-    'Cambio Tickets',
-    'Visas',
-    'Finalizado',
-  ]);
-  const otrosPendientes = pendientes.filter((p) => !standardStatuses.has(p.status));
-
-  const totalSeguimiento =
-    cotizacionesList.length +
-    reservas24hList.length +
-    pagosPendientesCount +
-    emitidasList.length +
-    consultasList.length +
-    cambiosList.length +
-    pagosDemoradosCount +
-    visasList.length +
-    otrosPendientes.length;
-
-  // 1. TABLA RESUMEN OPERATIVO
+  // 1. PESTAÑA 1: RESUMEN OPERATIVO
   const resumenRows: string[][] = [
     [
-      'Cotizaciones Pendientes',
-      String(cotizacionesList.length),
-      'Solicitudes en espera de cotización y respuesta para reservas',
+      'Pendientes Hoy (Vuelos Hoy/Mañana y 24h)',
+      String(pendientesHoyEvaluated.length),
+      'Vuelos de hoy/mañana y reservas 24h por vencer',
+      'Urgente (Prioridad Día)',
+      'Atender de inmediato',
+    ],
+    [
+      'Pendiente Cotización',
+      String(cotizacionesPendList.length),
+      'Solicitudes en espera de cotización para reservas',
       'Alta (Acción inmediata)',
       'Enviar itinerarios y tarifas',
     ],
     [
-      'Reserva (apartado 24hrs)',
+      'Cotización Enviada',
+      String(cotizacionesEnvList.length),
+      'Cotizaciones enviadas esperando respuesta del cliente',
+      'Alta',
+      'Hacer seguimiento de cierre',
+    ],
+    [
+      'Reserva por 24h',
       String(reservas24hList.length),
       'Al día / requieren re-etiquetar, envío factura email o WhatsApp',
       'Alta',
       'Verificar pago y emitir',
     ],
     [
-      'Reserva / Pago Pendiente',
-      String(pagosPendientesCount),
-      'En seguimiento de pago o abono parcial',
-      'Alta',
-      'Hacer seguimiento de pago',
-    ],
-    [
-      'Viaje Confirmado / Boleto Emitido',
+      'Reserva Emitida (Viajes y Check-in)',
       String(emitidasList.length),
       'Servicio completado / seguimiento de vuelo y novedades',
       'Monitoreo',
       'Seguimiento de vuelo / Check-in',
-    ],
-    [
-      'Consultas',
-      String(consultasList.length),
-      'Consultas y orientaciones generales',
-      'Media',
-      'Responder dudas',
-    ],
-    [
-      'Cambio de Tickets',
-      String(cambiosList.length),
-      'Reprogramaciones y penalidades',
-      'Alta operativa',
-      'Tramitar con aerolínea',
-    ],
-    [
-      'Pendiente Pagos Viejos / Demorados',
-      String(pagosDemoradosCount),
-      'Cobranza acumulada / Saldos pendientes vencidos',
-      'Cobranzas / Alta',
-      'Gestión de cobro acumulado',
     ],
     [
       'Visas',
@@ -231,151 +344,138 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
       'Verificar estatus de tramitación',
     ],
     [
+      'Consultas',
+      String(consultasList.length),
+      'Consultas y orientaciones generales',
+      'Media',
+      'Responder dudas',
+    ],
+    [
+      'Cambio Tickets',
+      String(cambiosList.length),
+      'Reprogramaciones y penalidades',
+      'Alta operativa',
+      'Tramitar con aerolínea',
+    ],
+    [
+      'Reserva / Pago Pendiente o Abono',
+      String(pagosPendientesCount),
+      'En seguimiento de pago o abono parcial',
+      'Alta',
+      'Hacer seguimiento de pago',
+    ],
+    [
+      'Pendiente Pagos Demorados',
+      String(pagosDemoradosCount),
+      'Cobranza acumulada / Saldos pendientes vencidos',
+      'Cobranzas / Alta',
+      'Gestión de cobro acumulado',
+    ],
+    [
       'Pendiente Check-in',
       String(checkinPendienteCount),
       'Pasajeros con reserva emitida pendientes de check-in',
       'Media',
       'Realizar check-in web',
     ],
-    [
-      'Finalizados',
-      String(finalizadosList.length),
-      'Gestiones cerradas / archivadas',
-      'Informativo',
-      'Sin acción pendiente',
-    ],
   ];
 
-  if (otrosPendientes.length > 0) {
+  // Agregar al resumen cualquier estatus personalizado creado en Estatus
+  const baseStatusNames = new Set([
+    'Pendiente Cotizacion',
+    'Cotizacion Enviada',
+    'Reserva por 24h',
+    'Reserva Emitida',
+    'Visas',
+    'Consultas',
+    'Cambio Tickets',
+    'Finalizado',
+  ]);
+
+  const customStatuses = estatus.filter(
+    (e) =>
+      !baseStatusNames.has(e.nombre) &&
+      e.codigo.toLowerCase() !== 'finalizado' &&
+      e.nombre.toLowerCase() !== 'finalizado'
+  );
+
+  for (const cs of customStatuses) {
+    const countCs = pendientes.filter((p) => p.status === cs.nombre).length;
     resumenRows.push([
-      'Otros Estatus Personalizados',
-      String(otrosPendientes.length),
-      'Registros en estatus adicionales configurados',
-      'Media',
+      cs.nombre,
+      String(countCs),
+      'Estatus personalizado activo en el sistema',
+      'Media / Operativa',
       'Revisar seguimiento',
     ]);
   }
 
+  const totalActivos = pendientes.filter(
+    (p) => (p.status || '').toLowerCase() !== 'finalizado'
+  ).length;
+
   const sectionResumen: ReportSectionTable = {
-    title: 'RESUMEN OPERATIVO POR ETIQUETA / ESTATUS',
+    sheetName: 'Resumen Operativo',
+    title: 'RESUMEN OPERATIVO POR ETIQUETA / FILTRO',
     headers: [
-      'Lista / Etiqueta',
-      'Chats Activos',
+      'Lista / Filtro',
+      'Registros Activos',
       'Estado Operativo',
       'Prioridad Comercial',
       'Acción Sugerida',
     ],
     rows: resumenRows,
     footerRows: [
-      [
-        'TOTAL CHATS EN SEGUIMIENTO ACTIVO',
-        String(totalSeguimiento),
-        '',
-        '',
-        '',
-      ],
+      ['TOTAL PENDIENTES ACTIVOS EN SEGUIMIENTO', String(totalActivos), '', '', ''],
+      ['TOTAL FINALIZADOS (HISTÓRICO)', String(finalizadosList.length), '', '', ''],
     ],
   };
 
-  // 2. SOLICITUDES DE COTIZACIÓN PENDIENTES
-  const sectionCotizaciones: ReportSectionTable = {
-    title: 'SOLICITUDES DE COTIZACIÓN PENDIENTES',
+  // 2. PESTAÑA 2: PENDIENTES HOY
+  const sectionPendientesHoy: ReportSectionTable = {
+    sheetName: 'Pendientes Hoy',
+    title: 'PENDIENTES DE HOY Y +1 DÍA (VUELOS Y VENCIMIENTO RESERVAS 24H)',
     headers: [
       'Contacto / Cliente',
-      'Última Act.',
-      'Ruta / Fechas Solicitadas',
-      'Estado / Respuesta Pendiente',
-      'Precio / Abono / Ganancia',
       'Estatus',
+      'Alerta / Fecha Detectada',
+      'Fecha Gestión',
+      'Datos del Vuelo / Ruta',
+      'Observación',
+      'Precio / Abono / Ganancia',
     ],
     rows:
-      cotizacionesList.length > 0
-        ? cotizacionesList.map((item) => [
+      pendientesHoyEvaluated.length > 0
+        ? pendientesHoyEvaluated.map(({ item, evalHoy }) => [
             item.contacto || '-',
+            item.status,
+            evalHoy.matchLabel,
             item.fecha_gestion || '-',
             item.solicitud_vuelo || '-',
             item.observacion || '-',
             formatPriceSummary(item),
-            item.status === 'Cotizacion Enviada' ? 'Esperando Cliente (Enviada)' : 'Pendiente',
           ])
-        : [['Sin solicitudes de cotización pendientes', '-', '-', '-', '-', '-']],
+        : [['Sin pendientes urgentes para hoy o mañana', '-', '-', '-', '-', '-', '-']],
   };
 
-  // 3. RESERVAS EN ESPERA DE CONFIRMACIÓN Y PAGO (24 HRS)
-  const sectionReservas24h: ReportSectionTable = {
-    title: 'RESERVAS EN ESPERA DE CONFIRMACIÓN Y PAGO (24 HRS)',
-    headers: [
-      'Contacto / Cliente',
-      'Fecha Reserva',
-      'Aerolínea / Código PNR',
-      'Fecha Vuelo / Ruta',
-      'Observaciones / Estado',
-      'Precio / Abono / Ganancia',
-      'Estatus',
-    ],
-    rows:
-      reservas24hList.length > 0
-        ? reservas24hList.map((item) => {
-            const parts = extractCodigoParts(item);
-            const aeroPnr =
-              parts.aerolinea !== '-' && parts.localizador !== '-'
-                ? `${parts.aerolinea} (${parts.localizador})`
-                : parts.aerolinea !== '-'
-                  ? parts.aerolinea
-                  : parts.localizador !== '-'
-                    ? parts.localizador
-                    : item.codigo || '-';
-            return [
-              item.contacto || '-',
-              item.fecha_gestion || '-',
-              aeroPnr,
-              item.solicitud_vuelo || '-',
-              item.observacion || '-',
-              formatPriceSummary(item),
-              'Reserva 24h (Por Emitir)',
-            ];
-          })
-        : [['Sin reservas 24h activas', '-', '-', '-', '-', '-', '-']],
-  };
+  // 3. PESTAÑAS POR CADA FILTRO DE ESTATUS DE PENDIENTES
+  const orderedFilterStatuses: string[] = [
+    'Pendiente Cotizacion',
+    'Cotizacion Enviada',
+    'Reserva por 24h',
+    'Reserva Emitida',
+    'Visas',
+    'Consultas',
+    'Cambio Tickets',
+    ...customStatuses.map((c) => c.nombre),
+  ];
 
-  // 4. VIAJES CONFIRMADOS Y MONITOREO DE CHECK-IN
-  const sectionEmitidas: ReportSectionTable = {
-    title: 'VIAJES CONFIRMADOS Y MONITOREO DE CHECK-IN',
-    headers: [
-      'Contacto / Cliente',
-      'Aerolínea',
-      'Código PNR / Apellido Pasajero',
-      'Fecha Vuelo / Ruta',
-      'Estatus Check-in',
-      'Precio / Abono / Ganancia',
-      'Notas Adicionales',
-    ],
-    rows:
-      emitidasList.length > 0
-        ? emitidasList.map((item) => {
-            const parts = extractCodigoParts(item);
-            const pnrApellido =
-              parts.localizador !== '-' && parts.apellidos !== '-'
-                ? `${parts.localizador} / ${parts.apellidos}`
-                : parts.localizador !== '-'
-                  ? parts.localizador
-                  : parts.apellidos !== '-'
-                    ? parts.apellidos
-                    : item.codigo || '-';
-            return [
-              item.contacto || '-',
-              parts.aerolinea,
-              pnrApellido,
-              item.solicitud_vuelo || '-',
-              item.checkin && item.checkin !== '-' ? item.checkin : 'Pendiente',
-              formatPriceSummary(item),
-              item.observacion || '-',
-            ];
-          })
-        : [['Sin viajes confirmados registrados', '-', '-', '-', '-', '-', '-']],
-  };
+  const filterSections: ReportSectionTable[] = orderedFilterStatuses.map((stName) => {
+    const matchingItems = pendientes.filter((p) => p.status === stName);
+    return buildFilterSectionForStatus(stName, matchingItems);
+  });
 
-  // 5. CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES
+  // 4. PESTAÑA DE COBRANZAS Y PAGOS
   let subtotalUsdPendiente = 0;
   let subtotalFlsPendiente = 0;
 
@@ -397,6 +497,7 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
   }
 
   const sectionPagos: ReportSectionTable = {
+    sheetName: 'Cobranzas y Pagos',
     title: 'CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES',
     headers: [
       'Contacto / Cliente',
@@ -420,7 +521,7 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
               p.monto || '-',
               p.abono || '-',
               p.ganancia || '-',
-              curr === 'USD' ? '$ (USD)' : 'Fls (ANG/XCG)',
+              curr === 'USD' ? '$ (USD)' : 'Fls',
               p.status,
               p.observacion || '-',
             ];
@@ -434,7 +535,7 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
         `${subtotalUsdPendiente.toFixed(2)} $`,
         '',
         '',
-        'USD',
+        '$',
         '',
         '',
       ],
@@ -452,62 +553,21 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
     ],
   };
 
-  // 6. REPROGRAMACIONES, CAMBIOS DE TICKET, VISAS Y CONSULTAS GENERALES
-  const cambiosYConsultas = [
-    ...cambiosList,
-    ...consultasList,
-    ...visasList,
-    ...otrosPendientes,
-  ];
-
-  const sectionCambiosConsultas: ReportSectionTable = {
-    title: 'REPROGRAMACIONES, CAMBIOS DE TICKET, VISAS Y CONSULTAS GENERALES',
-    headers: [
-      'Tipo / Categoría',
-      'Contacto / Cliente',
-      'Fecha Solic.',
-      'Detalle de la Solicitud / PNR',
-      'Precio / Abono / Ganancia',
-      'Acción Requerida / Estado',
-    ],
-    rows:
-      cambiosYConsultas.length > 0
-        ? cambiosYConsultas.map((item) => {
-            const detalle =
-              item.solicitud_vuelo && item.solicitud_vuelo !== '-'
-                ? item.solicitud_vuelo
-                : item.codigo && item.codigo !== '-'
-                  ? item.codigo
-                  : '-';
-            return [
-              item.status,
-              item.contacto || '-',
-              item.fecha_gestion || '-',
-              detalle,
-              formatPriceSummary(item),
-              item.observacion || '-',
-            ];
-          })
-        : [['-', 'Sin cambios o consultas pendientes', '-', '-', '-', '-']],
-  };
-
   return {
     mainTitle: 'GLOBAL TRAVEL CW - RESUMEN OPERATIVO DE WHATSAPP',
     subTitle: `Fecha de Emisión: ${emissionDate} | Responsable: Daniela Ramírez`,
     dateSlug,
     sections: [
       sectionResumen,
-      sectionCotizaciones,
-      sectionReservas24h,
-      sectionEmitidas,
+      sectionPendientesHoy,
+      ...filterSections,
       sectionPagos,
-      sectionCambiosConsultas,
     ],
   };
 }
 
 // ============================================================================
-// GENERADOR DE EXCEL (.xlsx nativo OpenXML ZIP sin dependencias externas)
+// GENERADOR DE EXCEL (.xlsx Multi-Pestaña OpenXML ZIP sin dependencias)
 // ============================================================================
 
 function escapeXml(str: string): string {
@@ -576,12 +636,12 @@ function createStoredZip(files: Array<{ name: string; content: string }>): Uint8
 
   for (const e of entries) {
     localOffsets.push(offset);
-    view.setUint32(offset, 0x04034b50, true); // Local file header signature
-    view.setUint16(offset + 4, 20, true); // Version needed
-    view.setUint16(offset + 6, 0x0800, true); // UTF-8 flag
-    view.setUint16(offset + 8, 0, true); // Store (no compression)
-    view.setUint16(offset + 10, 0, true); // Mod time
-    view.setUint16(offset + 12, 0x21, true); // Mod date
+    view.setUint32(offset, 0x04034b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 0x0800, true);
+    view.setUint16(offset + 8, 0, true);
+    view.setUint16(offset + 10, 0, true);
+    view.setUint16(offset + 12, 0x21, true);
     view.setUint32(offset + 14, e.crc, true);
     view.setUint32(offset + 18, e.dataBytes.length, true);
     view.setUint32(offset + 22, e.dataBytes.length, true);
@@ -596,7 +656,7 @@ function createStoredZip(files: Array<{ name: string; content: string }>): Uint8
   const centralStart = offset;
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    view.setUint32(offset, 0x02014b50, true); // Central dir signature
+    view.setUint32(offset, 0x02014b50, true);
     view.setUint16(offset + 4, 20, true);
     view.setUint16(offset + 6, 20, true);
     view.setUint16(offset + 8, 0x0800, true);
@@ -618,7 +678,7 @@ function createStoredZip(files: Array<{ name: string; content: string }>): Uint8
   }
 
   const centralEnd = offset;
-  view.setUint32(offset, 0x06054b50, true); // End of central dir signature
+  view.setUint32(offset, 0x06054b50, true);
   view.setUint16(offset + 4, 0, true);
   view.setUint16(offset + 6, 0, true);
   view.setUint16(offset + 8, entries.length, true);
@@ -630,23 +690,17 @@ function createStoredZip(files: Array<{ name: string; content: string }>): Uint8
   return out;
 }
 
-/**
- * Estilos OpenXML para el archivo .xlsx:
- * 0 = Default
- * 1 = Main Title (Fondo Azul Marino #1E3A8A, Texto Blanco Bold 14pt)
- * 2 = Subtitle (Fondo Gris Azulado #EFF6FF, Texto Azul Marino Bold 10pt)
- * 3 = Section Banner (Fondo Rojo Global Travel #DC2626, Texto Blanco Bold 11pt)
- * 4 = Table Header (Fondo Azul Marino #1E3A8A, Texto Blanco Bold 10pt con bordes)
- * 5 = Data Cell (Fondo Blanco, Texto Negro 10pt con bordes y wrapText)
- * 6 = Footer / Subtotal Cell (Fondo Amarillo Suave #FEF3C7, Texto Bold 10pt con bordes)
- */
-function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
+function buildSingleWorksheetXml(
+  mainTitle: string,
+  subTitle: string,
+  section: ReportSectionTable
+): string {
   let rowIndex = 1;
   const rowsXml: string[] = [];
   const mergeCells: string[] = [];
-  const maxCols = 9;
+  const colCount = Math.max(5, section.headers.length);
 
-  function addFullBannerRow(text: string, styleIdx: number, height: number, spanCols = maxCols) {
+  function addFullBannerRow(text: string, styleIdx: number, height: number, spanCols = colCount) {
     const cells: string[] = [];
     for (let c = 0; c < spanCols; c++) {
       const ref = `${colIndexToLetter(c)}${rowIndex}`;
@@ -681,48 +735,75 @@ function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
     rowIndex++;
   }
 
-  // Cabecera Principal
-  addFullBannerRow(report.mainTitle, 1, 28, maxCols);
-  addFullBannerRow(report.subTitle, 2, 22, maxCols);
+  // Encabezado de la hoja
+  addFullBannerRow(mainTitle, 1, 28, colCount);
+  addFullBannerRow(subTitle, 2, 22, colCount);
   addBlankRow();
 
-  // Cada sección del reporte
-  for (const section of report.sections) {
-    const colCount = section.headers.length;
-    addFullBannerRow(section.title, 3, 24, colCount);
-    addCellsRow(section.headers, 4, 24);
+  // Título de la pestaña / filtro y su tabla
+  addFullBannerRow(section.title, 3, 24, colCount);
+  addCellsRow(section.headers, 4, 24);
 
-    for (const r of section.rows) {
-      addCellsRow(r, 5, 22);
+  for (const r of section.rows) {
+    addCellsRow(r, 5, 22);
+  }
+
+  if (section.footerRows) {
+    for (const fRow of section.footerRows) {
+      addCellsRow(fRow, 6, 22);
     }
-
-    if (section.footerRows) {
-      for (const fRow of section.footerRows) {
-        addCellsRow(fRow, 6, 22);
-      }
-    }
-
-    addBlankRow();
   }
 
   const colsXml = [
     '<col min="1" max="1" width="34" customWidth="1"/>',
-    '<col min="2" max="2" width="18" customWidth="1"/>',
+    '<col min="2" max="2" width="20" customWidth="1"/>',
     '<col min="3" max="3" width="36" customWidth="1"/>',
     '<col min="4" max="4" width="38" customWidth="1"/>',
-    '<col min="5" max="5" width="30" customWidth="1"/>',
-    '<col min="6" max="6" width="26" customWidth="1"/>',
-    '<col min="7" max="7" width="24" customWidth="1"/>',
-    '<col min="8" max="8" width="24" customWidth="1"/>',
-    '<col min="9" max="9" width="36" customWidth="1"/>',
+    '<col min="5" max="5" width="24" customWidth="1"/>',
+    '<col min="6" max="6" width="20" customWidth="1"/>',
+    '<col min="7" max="7" width="20" customWidth="1"/>',
+    '<col min="8" max="8" width="22" customWidth="1"/>',
+    '<col min="9" max="9" width="34" customWidth="1"/>',
   ].join('');
 
-  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <cols>${colsXml}</cols>
   <sheetData>${rowsXml.join('')}</sheetData>
   <mergeCells count="${mergeCells.length}">${mergeCells.join('')}</mergeCells>
 </worksheet>`;
+}
+
+/**
+ * Construye un libro .xlsx donde CADA FILTRO es una pestaña (hoja) independiente.
+ */
+function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
+  const usedSheetNames = new Set<string>();
+  const sheetEntries: Array<{
+    sheetId: number;
+    rId: string;
+    name: string;
+    filePath: string;
+    xmlContent: string;
+  }> = [];
+
+  report.sections.forEach((section, idx) => {
+    const sheetId = idx + 1;
+    const rId = `rId${sheetId}`;
+    const safeName = sanitizeSheetName(section.sheetName || section.title, usedSheetNames);
+    const filePath = `xl/worksheets/sheet${sheetId}.xml`;
+    const xmlContent = buildSingleWorksheetXml(report.mainTitle, report.subTitle, section);
+
+    sheetEntries.push({
+      sheetId,
+      rId,
+      name: safeName,
+      filePath,
+      xmlContent,
+    });
+  });
+
+  const stylesRId = `rId${sheetEntries.length + 1}`;
 
   const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -778,17 +859,29 @@ function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
   </cellXfs>
 </styleSheet>`;
 
+  const sheetsNodes = sheetEntries
+    .map(
+      (s) =>
+        `<sheet name="${escapeXml(s.name)}" sheetId="${s.sheetId}" r:id="${s.rId}"/>`
+    )
+    .join('');
+
   const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-    <sheet name="Resumen Operativo" sheetId="1" r:id="rId1"/>
-  </sheets>
+  <sheets>${sheetsNodes}</sheets>
 </workbook>`;
+
+  const relsNodes = sheetEntries
+    .map(
+      (s) =>
+        `<Relationship Id="${s.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${s.sheetId}.xml"/>`
+    )
+    .join('');
 
   const workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${relsNodes}
+  <Relationship Id="${stylesRId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
 
   const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -796,23 +889,32 @@ function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>`;
 
+  const worksheetOverrides = sheetEntries
+    .map(
+      (s) =>
+        `<Override PartName="/xl/worksheets/sheet${s.sheetId}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+    )
+    .join('');
+
   const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  ${worksheetOverrides}
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`;
 
-  return createStoredZip([
+  const zipFiles: Array<{ name: string; content: string }> = [
     { name: '[Content_Types].xml', content: contentTypesXml },
     { name: '_rels/.rels', content: rootRelsXml },
     { name: 'xl/workbook.xml', content: workbookXml },
     { name: 'xl/_rels/workbook.xml.rels', content: workbookRelsXml },
     { name: 'xl/styles.xml', content: stylesXml },
-    { name: 'xl/worksheets/sheet1.xml', content: sheetXml },
-  ]);
+    ...sheetEntries.map((s) => ({ name: s.filePath, content: s.xmlContent })),
+  ];
+
+  return createStoredZip(zipFiles);
 }
 
 // ============================================================================
@@ -820,7 +922,6 @@ function buildXlsxBytes(report: BuiltOperationalReport): Uint8Array {
 // ============================================================================
 
 function toWinAnsiSafePdfString(input: string): string {
-  // Reemplazar emojis o caracteres fuera de WinAnsi por equivalentes limpios
   const cleaned = String(input ?? '')
     .replace(/→/g, '->')
     .replace(/[•·]/g, '-')
@@ -862,15 +963,14 @@ function wrapTextToWidth(text: string, maxChars: number): string[] {
     }
   }
   if (current) lines.push(current);
-  return lines.slice(0, 4); // Máximo 4 líneas por celda para mantener legibilidad
+  return lines.slice(0, 4);
 }
 
 function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
-  // A4 Landscape: 842 x 595 pt
   const pageWidth = 842;
   const pageHeight = 595;
   const marginX = 28;
-  const usableWidth = pageWidth - marginX * 2; // 786 pt
+  const usableWidth = pageWidth - marginX * 2;
   const topY = pageHeight - 32;
   const bottomLimitY = 38;
 
@@ -886,7 +986,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
     cursorY = topY;
 
     if (isFirstPage) {
-      // Banner principal Azul Marino (#1E3A8A -> 0.118, 0.227, 0.541)
       currentStream.push('0.118 0.227 0.541 rg');
       currentStream.push(`${marginX} ${cursorY - 26} ${usableWidth} 26 re f`);
       currentStream.push('1 1 1 rg');
@@ -895,7 +994,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
       );
       cursorY -= 26;
 
-      // Subtítulo (#EFF6FF -> 0.937, 0.965, 1.0)
       currentStream.push('0.937 0.965 1 rg');
       currentStream.push(`${marginX} ${cursorY - 18} ${usableWidth} 18 re f`);
       currentStream.push('0.118 0.227 0.541 rg');
@@ -904,7 +1002,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
       );
       cursorY -= 28;
     } else {
-      // Encabezado compacto en páginas siguientes
       currentStream.push('0.118 0.227 0.541 rg');
       currentStream.push(
         `BT /F2 8 Tf ${marginX} ${cursorY - 8} Td (${toWinAnsiSafePdfString(report.mainTitle + ' | ' + report.subTitle)}) Tj ET`
@@ -917,13 +1014,16 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
 
   function computeColWidths(colCount: number): number[] {
     if (colCount === 5) {
-      return [0.22, 0.1, 0.3, 0.18, 0.2].map((w) => w * usableWidth);
+      return [0.24, 0.1, 0.3, 0.18, 0.18].map((w) => w * usableWidth);
     }
     if (colCount === 6) {
       return [0.2, 0.11, 0.23, 0.22, 0.14, 0.1].map((w) => w * usableWidth);
     }
     if (colCount === 7) {
-      return [0.18, 0.1, 0.18, 0.16, 0.14, 0.13, 0.11].map((w) => w * usableWidth);
+      return [0.18, 0.11, 0.18, 0.09, 0.16, 0.16, 0.12].map((w) => w * usableWidth);
+    }
+    if (colCount === 8) {
+      return [0.18, 0.09, 0.18, 0.2, 0.09, 0.09, 0.09, 0.08].map((w) => w * usableWidth);
     }
     if (colCount === 9) {
       return [0.16, 0.08, 0.16, 0.09, 0.09, 0.09, 0.08, 0.11, 0.14].map(
@@ -935,7 +1035,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
   }
 
   function drawSectionHeader(title: string, headers: string[], colWidths: number[]) {
-    // Banner rojo de sección (#DC2626 -> 0.863, 0.149, 0.149)
     currentStream.push('0.863 0.149 0.149 rg');
     currentStream.push(`${marginX} ${cursorY - 18} ${usableWidth} 18 re f`);
     currentStream.push('1 1 1 rg');
@@ -944,7 +1043,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
     );
     cursorY -= 18;
 
-    // Cabecera de columnas (#1E3A8A)
     const headerHeight = 18;
     currentStream.push('0.118 0.227 0.541 rg');
     currentStream.push(`${marginX} ${cursorY - headerHeight} ${usableWidth} 18 re f`);
@@ -993,17 +1091,15 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
         drawSectionHeader(`${section.title} (Cont.)`, section.headers, colWidths);
       }
 
-      // Color de fondo de la fila
       if (isFooter) {
-        currentStream.push('0.996 0.953 0.780 rg'); // #FEF3C7
+        currentStream.push('0.996 0.953 0.780 rg');
       } else if (rIdx % 2 === 1) {
-        currentStream.push('0.961 0.969 0.980 rg'); // #F5F7FA
+        currentStream.push('0.961 0.969 0.980 rg');
       } else {
         currentStream.push('1 1 1 rg');
       }
       currentStream.push(`${marginX} ${cursorY - rowHeight} ${usableWidth} ${rowHeight} re f`);
 
-      // Bordes de celda
       currentStream.push('0.80 0.84 0.88 RG 0.4 w');
       let x = marginX;
       for (let c = 0; c < colWidths.length; c++) {
@@ -1012,7 +1108,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
         x += w;
       }
 
-      // Texto de cada celda
       currentStream.push('0.06 0.09 0.16 rg');
       x = marginX;
       const fontName = isFooter ? '/F2' : '/F1';
@@ -1038,7 +1133,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
     pageStreams.push(currentStream);
   }
 
-  // Numeración de páginas en el pie de cada página
   const totalPages = pageStreams.length;
   for (let p = 0; p < totalPages; p++) {
     pageStreams[p].push('0.4 0.45 0.52 rg');
@@ -1047,17 +1141,12 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
     );
   }
 
-  // Ensamblar objetos PDF 1.4
   const objects: string[] = [];
-  // Obj 1: Catalog
   objects.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-  // Obj 2: Pages (se rellenará después)
   objects.push('');
-  // Obj 3: Font Helvetica (WinAnsiEncoding para tildes y ñ)
   objects.push(
     '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n'
   );
-  // Obj 4: Font Helvetica-Bold
   objects.push(
     '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n'
   );
@@ -1094,7 +1183,6 @@ function buildPdfBytes(report: BuiltOperationalReport): Uint8Array {
   }
   pdfText += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
-  // Codificar en bytes Latin1/WinAnsi
   const bytes = new Uint8Array(pdfText.length);
   for (let i = 0; i < pdfText.length; i++) {
     bytes[i] = pdfText.charCodeAt(i) & 0xff;
