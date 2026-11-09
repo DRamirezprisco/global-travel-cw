@@ -8,9 +8,15 @@ interface Props {
   clientes: ClienteRecord[];
   estatusList?: EstatusRecord[];
   contactosList?: ContactoRecord[];
+  initialHoyMode?: boolean;
 }
 
-const { clientes, estatusList = [], contactosList = [] } = Astro.props;
+const {
+  clientes,
+  estatusList = [],
+  contactosList = [],
+  initialHoyMode = false,
+} = Astro.props;
 
 // Estatus activos para los filtros superiores (excluyendo Finalizado)
 const activeStatuses =
@@ -54,6 +60,7 @@ const statusCounts = activeStatuses.reduce(
 <section
   id="hero-pendientes-container"
   data-contactos={JSON.stringify(contactosList)}
+  data-initial-hoy={initialHoyMode ? 'true' : 'false'}
   class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
 >
   <!-- Tarjetas / Píldoras de los Estatus de Pendientes -->
@@ -94,15 +101,83 @@ const statusCounts = activeStatuses.reduce(
     </div>
   </div>
 
-  <!-- Barra de búsqueda por nombre y contador de registros -->
+  <!-- Banner Informativo del Modo "Pendientes Hoy" -->
+  <div
+    id="banner-pendientes-hoy"
+    class={`rounded-xl border-2 border-amber-400 bg-amber-50/90 p-4 shadow-xs transition ${initialHoyMode ? '' : 'hidden'}`}
+  >
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-3 py-1 text-xs font-extrabold text-white shadow-xs">
+            📅 PENDIENTES DE HOY Y +1 DÍA
+          </span>
+          <span id="hoy-range-summary" class="text-xs font-extrabold text-primary">
+            Cargando rango de fechas...
+          </span>
+        </div>
+        <p class="text-xs text-primary/80 leading-relaxed">
+          <strong>Vuelos / Multiruta (Datos del Vuelo):</strong> Filtra fecha actual y 1 día después (ej. <code class="bg-white/80 px-1 rounded">22NOV MARCUR</code> → <code class="bg-white/80 px-1 rounded">22/11/2026</code>; en multirutas como <code class="bg-white/80 px-1 rounded">27DEC CURMAR / 10JAN CURMAR</code> evalúa ambas fechas ordenando primero la más cercana y luego la más lejana).
+          <strong class="ml-1">Reserva por 24h:</strong> Filtra por <strong>Fecha de Gestión</strong> que vence hoy (de hoy y de ayer).
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <label for="input-hoy-ref-date" class="text-xs font-extrabold uppercase text-primary/80">
+          Fecha base:
+        </label>
+        <input
+          type="date"
+          id="input-hoy-ref-date"
+          class="rounded-lg border border-amber-400 bg-base px-2.5 py-1.5 text-xs font-bold text-primary focus:border-primary focus:outline-none cursor-pointer"
+        />
+        <button
+          type="button"
+          id="btn-reset-hoy-date"
+          title="Restablecer a la fecha actual de hoy"
+          class="rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 text-xs transition cursor-pointer"
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          id="btn-exit-hoy-mode"
+          class="rounded-lg border border-primary/30 bg-base hover:bg-base-muted text-primary font-bold px-3 py-1.5 text-xs transition cursor-pointer"
+        >
+          Ver Todos los Pendientes ✕
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de búsqueda por nombre, botón Pendientes de Hoy y contador de registros -->
   <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="relative flex-1 max-w-md">
-      <input
-        type="search"
-        id="input-search-clientes"
-        placeholder="Buscar por nombre..."
-        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
-      />
+    <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-2xl">
+      <div class="relative flex-1">
+        <input
+          type="search"
+          id="input-search-clientes"
+          placeholder="Buscar por nombre..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <!-- Botón de Pendientes de Hoy dentro del menú Pendientes -->
+      <button
+        type="button"
+        id="btn-toggle-pendientes-hoy"
+        title="Ver pendientes de hoy y +1 día (por Datos del Vuelo) y Reservas 24h por vencer (hoy y ayer)"
+        class="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-900 font-extrabold px-3.5 py-2 text-xs shadow-xs transition cursor-pointer whitespace-nowrap"
+      >
+        <span>📅</span>
+        <span>Pendientes de Hoy</span>
+        <span
+          id="badge-count-pendientes-hoy"
+          class="inline-flex items-center justify-center rounded-full bg-amber-600 text-white px-2 py-0.5 text-[11px] font-extrabold"
+        >
+          0
+        </span>
+      </button>
     </div>
 
     <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
@@ -295,7 +370,13 @@ const statusCounts = activeStatuses.reduce(
                     data-cell-vuelo={cliente.id}
                     class="py-3.5 px-4 align-middle text-xs font-semibold text-primary"
                   >
-                    {cliente.solicitud_vuelo}
+                    <div class="space-y-1">
+                      <div data-vuelo-text={cliente.id}>{cliente.solicitud_vuelo}</div>
+                      <div
+                        data-hoy-badge={cliente.id}
+                        class="hidden text-[11px] font-extrabold rounded px-2 py-0.5 w-fit bg-amber-100 text-amber-900 border border-amber-300"
+                      ></div>
+                    </div>
                   </td>
 
                   <td
@@ -799,6 +880,12 @@ const statusCounts = activeStatuses.reduce(
 <script>
   import { STATUS_CONFIGS } from '@/constants/statuses';
   import type { ClienteRecord, ContactoRecord } from '@/types';
+  import {
+    createMidnightDate,
+    evaluatePendienteForHoy,
+    extractFlightDatesFromText,
+    formatDateDDMMYYYY,
+  } from '@/utils/flightDateHelpers';
   import { buildWhatsAppDynamicLink, parseContactoInitial } from '@/utils/pagoHelpers';
 
   const heroContainer = document.querySelector<HTMLElement>('#hero-pendientes-container');
@@ -810,6 +897,38 @@ const statusCounts = activeStatuses.reduce(
   const searchInput = document.querySelector<HTMLInputElement>('#input-search-clientes');
   const resetBtn = document.querySelector<HTMLButtonElement>('#btn-reset-status');
   let selectedStatus = 'ALL';
+  let isHoyMode = heroContainer?.dataset.initialHoy === 'true';
+
+  const bannerHoy = document.querySelector<HTMLElement>('#banner-pendientes-hoy');
+  const btnToggleHoy = document.querySelector<HTMLButtonElement>('#btn-toggle-pendientes-hoy');
+  const badgeCountHoy = document.querySelector<HTMLElement>('#badge-count-pendientes-hoy');
+  const hoyRangeSummary = document.querySelector<HTMLElement>('#hoy-range-summary');
+  const inputHoyRefDate = document.querySelector<HTMLInputElement>('#input-hoy-ref-date');
+  const btnResetHoyDate = document.querySelector<HTMLButtonElement>('#btn-reset-hoy-date');
+  const btnExitHoyMode = document.querySelector<HTMLButtonElement>('#btn-exit-hoy-mode');
+
+  function getTodayInputIso(): string {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  if (inputHoyRefDate && !inputHoyRefDate.value) {
+    inputHoyRefDate.value = getTodayInputIso();
+  }
+
+  function getReferenceDate(): Date {
+    const val = inputHoyRefDate?.value;
+    if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      const [y, m, d] = val.split('-').map(Number);
+      return createMidnightDate(y, m, d);
+    }
+    const now = new Date();
+    return createMidnightDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+
   const tbody = document.querySelector<HTMLTableSectionElement>('#clientes-tbody');
   const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
   const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
@@ -1000,16 +1119,102 @@ const statusCounts = activeStatuses.reduce(
   function applyFilters() {
     if (!tbody) return;
     const query = (searchInput?.value ?? '').toLowerCase().trim();
+    const refDate = getReferenceDate();
+    const tomorrowDate = createMidnightDate(
+      refDate.getFullYear(),
+      refDate.getMonth() + 1,
+      refDate.getDate() + 1
+    );
+    const yesterdayDate = createMidnightDate(
+      refDate.getFullYear(),
+      refDate.getMonth() + 1,
+      refDate.getDate() - 1
+    );
+
+    if (hoyRangeSummary) {
+      const strHoy = formatDateDDMMYYYY(refDate.getDate(), refDate.getMonth() + 1, refDate.getFullYear());
+      const strManana = formatDateDDMMYYYY(
+        tomorrowDate.getDate(),
+        tomorrowDate.getMonth() + 1,
+        tomorrowDate.getFullYear()
+      );
+      const strAyer = formatDateDDMMYYYY(
+        yesterdayDate.getDate(),
+        yesterdayDate.getMonth() + 1,
+        yesterdayDate.getFullYear()
+      );
+      hoyRangeSummary.textContent = `Vuelos: Hoy (${strHoy}) y Mañana (${strManana}) | Reserva 24h por vencer: Ayer (${strAyer}) y Hoy (${strHoy})`;
+    }
+
     const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
 
     let visibleCount = 0;
+    let totalHoyMatches = 0;
+    const rowSortMeta = new Map<HTMLTableRowElement, { primary: number; secondary: number; id: number }>();
+
     for (const row of rows) {
+      const rowId = Number(row.dataset.rowId || 0);
       const rowStatus = row.dataset.rowStatus ?? '';
       const rowName = (row.dataset.rowName ?? '').toLowerCase();
-      const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
-      const matchesQuery = !query || rowName.includes(query);
+      let record: ClienteRecord | null = null;
+      try {
+        record = JSON.parse(row.dataset.rowRecord || '') as ClienteRecord;
+      } catch {}
 
-      if (matchesStatus && matchesQuery) {
+      const evalHoy = record
+        ? evaluatePendienteForHoy(record, refDate)
+        : {
+            matches: false,
+            isReserva24h: false,
+            parsedDates: [],
+            matchedDate: null,
+            matchLabel: '-',
+            sortTimestamp: Number.MAX_SAFE_INTEGER,
+            secondarySortTimestamp: Number.MAX_SAFE_INTEGER,
+          };
+
+      if (evalHoy.matches) {
+        totalHoyMatches++;
+      }
+
+      // Actualizar etiqueta visual de fechas detectadas en la celda Datos del Vuelo
+      const hoyBadge = row.querySelector<HTMLElement>(`[data-hoy-badge="${rowId}"]`);
+      if (hoyBadge && record) {
+        if (evalHoy.matches) {
+          hoyBadge.textContent = evalHoy.matchLabel;
+          hoyBadge.className = evalHoy.isReserva24h
+            ? 'text-[11px] font-extrabold rounded px-2 py-0.5 w-fit bg-sky-100 text-sky-900 border border-sky-300'
+            : 'text-[11px] font-extrabold rounded px-2 py-0.5 w-fit bg-amber-100 text-amber-900 border border-amber-300';
+        } else if (isHoyMode) {
+          hoyBadge.classList.add('hidden');
+        } else {
+          // En modo normal, si tiene fechas compuestas / multiruta, mostrar las fechas detectadas ordenadas de más cercana a más lejana
+          const extracted = extractFlightDatesFromText(record.solicitud_vuelo, refDate);
+          if (extracted.length > 0) {
+            const chronological = [...extracted].sort((a, b) => a.timestamp - b.timestamp);
+            hoyBadge.textContent = `📅 ${chronological.map((d) => d.formatted).join(' → ')}`;
+            hoyBadge.className =
+              'text-[11px] font-bold rounded px-2 py-0.5 w-fit bg-base-muted text-primary/75 border border-base-border';
+          } else {
+            hoyBadge.classList.add('hidden');
+          }
+        }
+      }
+
+      rowSortMeta.set(row, {
+        primary: evalHoy.sortTimestamp,
+        secondary: evalHoy.secondarySortTimestamp,
+        id: rowId,
+      });
+
+      const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
+      const matchesQuery =
+        !query ||
+        rowName.includes(query) ||
+        (record?.solicitud_vuelo || '').toLowerCase().includes(query);
+      const matchesHoy = !isHoyMode || evalHoy.matches;
+
+      if (matchesStatus && matchesQuery && matchesHoy) {
         row.style.display = '';
         visibleCount++;
       } else {
@@ -1017,8 +1222,54 @@ const statusCounts = activeStatuses.reduce(
       }
     }
 
+    // Si estamos en "Pendientes Hoy", ordenar filas primero por la fecha más cercana y luego por la más lejana
+    if (isHoyMode) {
+      const sortedRows = [...rows].sort((a, b) => {
+        const metaA = rowSortMeta.get(a)!;
+        const metaB = rowSortMeta.get(b)!;
+        if (metaA.primary !== metaB.primary) return metaA.primary - metaB.primary;
+        if (metaA.secondary !== metaB.secondary) return metaA.secondary - metaB.secondary;
+        return metaA.id - metaB.id;
+      });
+      for (const r of sortedRows) {
+        tbody.appendChild(r);
+      }
+    } else {
+      // Orden original por ID en vista general
+      const sortedById = [...rows].sort(
+        (a, b) => Number(a.dataset.rowId || 0) - Number(b.dataset.rowId || 0)
+      );
+      for (const r of sortedById) {
+        tbody.appendChild(r);
+      }
+    }
+
+    if (badgeCountHoy) {
+      badgeCountHoy.textContent = String(totalHoyMatches);
+    }
+
+    if (bannerHoy) {
+      if (isHoyMode) {
+        bannerHoy.classList.remove('hidden');
+      } else {
+        bannerHoy.classList.add('hidden');
+      }
+    }
+
+    if (btnToggleHoy) {
+      if (isHoyMode) {
+        btnToggleHoy.classList.remove('bg-amber-50', 'text-amber-900');
+        btnToggleHoy.classList.add('bg-amber-500', 'text-white', 'ring-2', 'ring-amber-300');
+      } else {
+        btnToggleHoy.classList.add('bg-amber-50', 'text-amber-900');
+        btnToggleHoy.classList.remove('bg-amber-500', 'text-white', 'ring-2', 'ring-amber-300');
+      }
+    }
+
     if (visibleCounter) {
-      visibleCounter.innerHTML = `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
+      visibleCounter.innerHTML = isHoyMode
+        ? `Pendientes Hoy: <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`
+        : `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
     }
 
     document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
@@ -1096,8 +1347,33 @@ const statusCounts = activeStatuses.reduce(
     modal.showModal();
   }
 
-  // Eventos de filtrado
+  // Eventos de búsqueda, Pendientes de Hoy y filtro por estatus
   searchInput?.addEventListener('input', applyFilters);
+
+  btnToggleHoy?.addEventListener('click', () => {
+    isHoyMode = !isHoyMode;
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  btnExitHoyMode?.addEventListener('click', () => {
+    isHoyMode = false;
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  inputHoyRefDate?.addEventListener('change', () => {
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  btnResetHoyDate?.addEventListener('click', () => {
+    if (inputHoyRefDate) {
+      inputHoyRefDate.value = getTodayInputIso();
+    }
+    applyFilters();
+    updateSelectionUI();
+  });
 
   resetBtn?.addEventListener('click', () => {
     selectedStatus = 'ALL';
@@ -1573,7 +1849,12 @@ const statusCounts = activeStatuses.reduce(
             label.textContent = updated.status;
           }
           if (cellFecha) cellFecha.textContent = updated.fecha_gestion;
-          if (cellVuelo) cellVuelo.textContent = updated.solicitud_vuelo;
+          const vueloTextEl = row.querySelector<HTMLElement>(`[data-vuelo-text="${updated.id}"]`);
+          if (vueloTextEl) {
+            vueloTextEl.textContent = updated.solicitud_vuelo;
+          } else if (cellVuelo) {
+            cellVuelo.textContent = updated.solicitud_vuelo;
+          }
           if (cellObs) cellObs.textContent = updated.observacion;
           if (cellPrecio) {
             const parts: string[] = [];
@@ -1745,4 +2026,8 @@ const statusCounts = activeStatuses.reduce(
 
     await executeSavePendiente(payload);
   });
+
+  // Inicializar vista y conteo de Pendientes de Hoy al cargar
+  applyFilters();
+  updateSelectionUI();
 </script>
