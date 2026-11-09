@@ -136,6 +136,24 @@ const statusCounts = activeStatuses.reduce(
         </button>
         <button
           type="button"
+          data-export-excel="true"
+          title="Descargar Reporte Operativo en Excel (.xlsx)"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+        >
+          <span>📊</span>
+          <span data-export-excel-label>Excel</span>
+        </button>
+        <button
+          type="button"
+          data-export-pdf="true"
+          title="Descargar Reporte Operativo en PDF (.pdf)"
+          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+        >
+          <span>📄</span>
+          <span data-export-pdf-label>PDF</span>
+        </button>
+        <button
+          type="button"
           id="btn-open-new-modal"
           class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
         >

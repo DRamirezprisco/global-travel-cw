@@ -10,7 +10,7 @@ const { activeTab = 'pendientes' } = Astro.props;
 
 <header class="bg-base border-b border-base-border shadow-xs sticky top-0 z-30">
   <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <!-- Logo a la izquierda -->
       <a href="/" class="flex items-center gap-3 focus:outline-none group" aria-label="Global Travel CW">
         <img
@@ -21,27 +21,109 @@ const { activeTab = 'pendientes' } = Astro.props;
         />
       </a>
 
-      <!-- Menú a la derecha (Contactos, Pendientes, Pagos y Estatus) -->
-      <nav class="flex items-center gap-1.5 sm:gap-2" aria-label="Menú principal">
-        {
-          NAV_ITEMS.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <a
-                href={item.href}
-                class={`px-4 py-2 rounded-lg text-sm transition cursor-pointer ${
-                  isActive
-                    ? 'bg-primary text-base font-bold shadow-xs hover:bg-primary-light'
-                    : 'text-primary/80 hover:text-primary hover:bg-base-muted font-semibold'
-                }`}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                {item.label}
-              </a>
-            );
-          })
-        }
-      </nav>
+      <!-- Botones de Descarga de Reporte Operativo (Excel y PDF) + Menú Principal -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto">
+        <!-- Botones de exportación directa -->
+        <div class="flex items-center gap-1.5 border-r border-base-border pr-2 sm:pr-3">
+          <button
+            type="button"
+            data-export-excel="true"
+            title="Descargar Reporte Operativo actualizado en formato Excel (.xlsx)"
+            class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold px-3 py-2 text-xs shadow-xs transition cursor-pointer disabled:opacity-60"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0" aria-hidden="true"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
+            <span data-export-excel-label>Descargar Excel</span>
+          </button>
+
+          <button
+            type="button"
+            data-export-pdf="true"
+            title="Descargar Reporte Operativo actualizado en formato PDF (.pdf)"
+            class="inline-flex items-center gap-1.5 rounded-lg bg-secondary hover:bg-secondary-light active:bg-secondary-dark text-white font-extrabold px-3 py-2 text-xs shadow-xs transition cursor-pointer disabled:opacity-60"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+            <span data-export-pdf-label>Descargar PDF</span>
+          </button>
+        </div>
+
+        <!-- Menú a la derecha (Contactos, Pendientes, Pagos y Estatus) -->
+        <nav class="flex items-center gap-1.5 sm:gap-2" aria-label="Menú principal">
+          {
+            NAV_ITEMS.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <a
+                  href={item.href}
+                  class={`px-3.5 py-2 rounded-lg text-sm transition cursor-pointer ${
+                    isActive
+                      ? 'bg-primary text-base font-bold shadow-xs hover:bg-primary-light'
+                      : 'text-primary/80 hover:text-primary hover:bg-base-muted font-semibold'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  {item.label}
+                </a>
+              );
+            })
+          }
+        </nav>
+      </div>
     </div>
   </div>
 </header>
+
+<script>
+  import {
+    downloadOperationalReportExcel,
+    downloadOperationalReportPdf,
+  } from '@/utils/reportExporter';
+
+  document.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement;
+
+    const excelBtn = target.closest<HTMLButtonElement>('[data-export-excel]');
+    if (excelBtn) {
+      event.preventDefault();
+      if (excelBtn.disabled) return;
+      const label = excelBtn.querySelector<HTMLElement>('[data-export-excel-label]');
+      const prevText = label?.textContent || 'Descargar Excel';
+      excelBtn.disabled = true;
+      if (label) label.textContent = 'Generando Excel...';
+      try {
+        await downloadOperationalReportExcel();
+      } catch (err) {
+        alert(
+          err instanceof Error
+            ? err.message
+            : 'Ocurrió un error al generar el reporte en Excel.'
+        );
+      } finally {
+        excelBtn.disabled = false;
+        if (label) label.textContent = prevText;
+      }
+      return;
+    }
+
+    const pdfBtn = target.closest<HTMLButtonElement>('[data-export-pdf]');
+    if (pdfBtn) {
+      event.preventDefault();
+      if (pdfBtn.disabled) return;
+      const label = pdfBtn.querySelector<HTMLElement>('[data-export-pdf-label]');
+      const prevText = label?.textContent || 'Descargar PDF';
+      pdfBtn.disabled = true;
+      if (label) label.textContent = 'Generando PDF...';
+      try {
+        await downloadOperationalReportPdf();
+      } catch (err) {
+        alert(
+          err instanceof Error
+            ? err.message
+            : 'Ocurrió un error al generar el reporte en PDF.'
+        );
+      } finally {
+        pdfBtn.disabled = false;
+        if (label) label.textContent = prevText;
+      }
+    }
+  });
+</script>

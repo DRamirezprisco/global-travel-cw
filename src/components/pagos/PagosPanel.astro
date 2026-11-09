@@ -63,7 +63,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
       />
     </div>
 
-    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
       <span id="visible-rows-counter">
         Mostrando <strong>{pagos.length}</strong> de <strong>{pagos.length}</strong>
       </span>
@@ -73,6 +73,26 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
       >
         Guardado en D1
       </span>
+      <div class="flex items-center gap-2 ml-auto sm:ml-0">
+        <button
+          type="button"
+          data-export-excel="true"
+          title="Descargar Reporte Operativo en Excel (.xlsx)"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+        >
+          <span>📊</span>
+          <span data-export-excel-label>Descargar Excel</span>
+        </button>
+        <button
+          type="button"
+          data-export-pdf="true"
+          title="Descargar Reporte Operativo en PDF (.pdf)"
+          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+        >
+          <span>📄</span>
+          <span data-export-pdf-label>Descargar PDF</span>
+        </button>
+      </div>
     </div>
   </div>
 
