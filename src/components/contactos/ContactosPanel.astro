@@ -10,7 +10,8 @@ interface Props {
 const { contactos } = Astro.props;
 
 const totalContactos = contactos.length;
-const conTelefono = contactos.filter((c) => c.telefono && c.telefono !== '-').length;
+const conTelefono = contactos.filter((c) => c.telefono && c.telefono.trim() !== '-' && c.telefono.trim() !== '').length;
+const sinTelefono = totalContactos - conTelefono;
 const conPasaporte = contactos.filter((c) => c.numero_pasaporte && c.numero_pasaporte !== '-').length;
 const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 ---
@@ -18,7 +19,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 <section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
   <!-- Píldoras de Análisis y Filtros Rápidos -->
   <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
       <!-- Todos -->
       <button
         type="button"
@@ -52,6 +53,24 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
           class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
         >
           {conTelefono}
+        </span>
+      </button>
+
+      <!-- Sin Teléfono -->
+      <button
+        type="button"
+        data-filter-pill="SIN_TEL"
+        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-rose-50 border-rose-200 text-rose-900"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-secondary"></span>
+          <span class="text-xs font-bold truncate">Sin Teléfono</span>
+        </div>
+        <span
+          id="stat-sin-tel"
+          class="inline-flex items-center justify-center rounded-md bg-base/80 text-secondary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
+        >
+          {sinTelefono}
         </span>
       </button>
 
@@ -93,16 +112,63 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
     </div>
   </div>
 
-  <!-- Barra de búsqueda por nombre/teléfono/pasaporte y botón Nuevo Contacto -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="relative flex-1 max-w-md">
-      <input
-        type="search"
-        id="input-search-contactos"
-        placeholder="Buscar por cliente, teléfono, nombres, pasaporte..."
-        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
-      />
-    </div>
+  <!-- Barra de búsqueda + Formulario de Filtro de Contactos (al lado del buscador) + Nuevo Contacto -->
+  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <form
+      id="form-filtro-contactos"
+      class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+      onsubmit="return false;"
+    >
+      <!-- Buscador de texto -->
+      <div class="relative flex-1 max-w-md">
+        <input
+          type="search"
+          id="input-search-contactos"
+          placeholder="Buscar por cliente, teléfono, nombres, pasaporte..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <!-- Selector de Filtro al lado del buscador -->
+      <div class="flex items-center gap-2">
+        <label for="select-filtro-contactos" class="text-xs font-extrabold uppercase text-primary/70 whitespace-nowrap">
+          Filtrar:
+        </label>
+        <select
+          id="select-filtro-contactos"
+          name="filtro_contacto"
+          aria-label="Filtrar contactos por teléfono, pasaporte o email"
+          class="rounded-lg border border-base-border bg-base-muted px-3 py-2 text-xs sm:text-sm font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+        >
+          <option value="ALL">Todos los contactos ({totalContactos})</option>
+          <option value="SIN_TEL">📵 Contactos Sin Teléfono ({sinTelefono})</option>
+          <option value="CON_TEL">📞 Contactos Con Teléfono ({conTelefono})</option>
+          <option value="CON_PAS">🛂 Con Pasaporte ({conPasaporte})</option>
+          <option value="SIN_PAS">⚠️ Sin Pasaporte ({totalContactos - conPasaporte})</option>
+          <option value="CON_EMAIL">✉️ Con Email ({conEmail})</option>
+        </select>
+
+        <!-- Botón directo rápido para ver Contactos Sin Teléfono -->
+        <button
+          type="button"
+          id="btn-toggle-sin-telefono"
+          title="Alternar vista de contactos que no tienen número de teléfono registrado"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-secondary/50 bg-rose-50 hover:bg-secondary hover:text-white text-secondary font-extrabold px-3 py-2 text-xs transition cursor-pointer whitespace-nowrap"
+        >
+          <span>📵</span>
+          <span>Sin Teléfono (<span id="btn-stat-sin-tel">{sinTelefono}</span>)</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-reset-filtro-contactos"
+          title="Restablecer búsqueda y filtros"
+          class="hidden rounded-lg border border-base-border bg-base-muted hover:bg-base px-2.5 py-2 text-xs font-bold text-primary/70 hover:text-primary transition cursor-pointer whitespace-nowrap"
+        >
+          Limpiar ✕
+        </button>
+      </div>
+    </form>
 
     <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
       <span id="visible-rows-counter">
@@ -504,6 +570,9 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   import { buildWhatsAppDynamicLink } from '@/utils/pagoHelpers';
 
   const searchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
+  const selectFiltro = document.querySelector<HTMLSelectElement>('#select-filtro-contactos');
+  const btnToggleSinTel = document.querySelector<HTMLButtonElement>('#btn-toggle-sin-telefono');
+  const btnResetFiltro = document.querySelector<HTMLButtonElement>('#btn-reset-filtro-contactos');
   let selectedFilter = 'ALL';
   const tbody = document.querySelector<HTMLTableSectionElement>('#contactos-tbody');
   const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
@@ -555,13 +624,21 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       const fullSearch = `${rec.contacto} ${rec.telefono} ${rec.email} ${rec.nombres} ${rec.apellidos} ${rec.numero_pasaporte} ${rec.nacionalidad_pasaporte}`.toLowerCase();
       const matchesQuery = !query || fullSearch.includes(query);
 
+      const hasTel = Boolean(rec.telefono && rec.telefono.trim() !== '-' && rec.telefono.trim() !== '');
+      const hasPas = Boolean(rec.numero_pasaporte && rec.numero_pasaporte.trim() !== '-' && rec.numero_pasaporte.trim() !== '');
+      const hasEmail = Boolean(rec.email && rec.email.trim() !== '-' && rec.email.trim() !== '');
+
       let matchesFilter = true;
       if (selectedFilter === 'CON_TEL') {
-        matchesFilter = rec.telefono !== '-' && Boolean(rec.telefono);
+        matchesFilter = hasTel;
+      } else if (selectedFilter === 'SIN_TEL') {
+        matchesFilter = !hasTel;
       } else if (selectedFilter === 'CON_PAS') {
-        matchesFilter = rec.numero_pasaporte !== '-' && Boolean(rec.numero_pasaporte);
+        matchesFilter = hasPas;
+      } else if (selectedFilter === 'SIN_PAS') {
+        matchesFilter = !hasPas;
       } else if (selectedFilter === 'CON_EMAIL') {
-        matchesFilter = rec.email !== '-' && Boolean(rec.email);
+        matchesFilter = hasEmail;
       }
 
       if (matchesQuery && matchesFilter) {
@@ -583,6 +660,28 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
         pill.classList.remove('ring-2', 'ring-primary', 'scale-[1.02]');
       }
     });
+
+    if (selectFiltro && selectFiltro.value !== selectedFilter) {
+      selectFiltro.value = selectedFilter;
+    }
+
+    if (btnToggleSinTel) {
+      if (selectedFilter === 'SIN_TEL') {
+        btnToggleSinTel.classList.remove('bg-rose-50', 'text-secondary');
+        btnToggleSinTel.classList.add('bg-secondary', 'text-white', 'ring-2', 'ring-secondary/40');
+      } else {
+        btnToggleSinTel.classList.add('bg-rose-50', 'text-secondary');
+        btnToggleSinTel.classList.remove('bg-secondary', 'text-white', 'ring-2', 'ring-secondary/40');
+      }
+    }
+
+    if (btnResetFiltro) {
+      if (selectedFilter !== 'ALL' || Boolean(query)) {
+        btnResetFiltro.classList.remove('hidden');
+      } else {
+        btnResetFiltro.classList.add('hidden');
+      }
+    }
   }
 
   function recalculateStats() {
@@ -598,13 +697,18 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       if (row.dataset.rowHasEmail === '1') emailCount++;
     }
 
+    const sinTelCount = rows.length - telCount;
     const statTotal = document.querySelector('#stat-total');
     const statTel = document.querySelector('#stat-tel');
+    const statSinTel = document.querySelector('#stat-sin-tel');
+    const btnStatSinTel = document.querySelector('#btn-stat-sin-tel');
     const statPas = document.querySelector('#stat-pas');
     const statEmail = document.querySelector('#stat-email');
 
     if (statTotal) statTotal.textContent = String(rows.length);
     if (statTel) statTel.textContent = String(telCount);
+    if (statSinTel) statSinTel.textContent = String(sinTelCount);
+    if (btnStatSinTel) btnStatSinTel.textContent = String(sinTelCount);
     if (statPas) statPas.textContent = String(pasCount);
     if (statEmail) statEmail.textContent = String(emailCount);
   }
@@ -660,9 +764,29 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   // Filtros pills
   document.querySelectorAll<HTMLButtonElement>('[data-filter-pill]').forEach((pill) => {
     pill.addEventListener('click', () => {
-      selectedFilter = pill.dataset.filterPill || 'ALL';
+      const targetFilter = pill.dataset.filterPill || 'ALL';
+      selectedFilter = selectedFilter === targetFilter && targetFilter !== 'ALL' ? 'ALL' : targetFilter;
       applyFilters();
     });
+  });
+
+  // Selector desplegable de filtro junto al buscador
+  selectFiltro?.addEventListener('change', () => {
+    selectedFilter = selectFiltro.value || 'ALL';
+    applyFilters();
+  });
+
+  // Botón rápido "Sin Teléfono" junto al buscador
+  btnToggleSinTel?.addEventListener('click', () => {
+    selectedFilter = selectedFilter === 'SIN_TEL' ? 'ALL' : 'SIN_TEL';
+    applyFilters();
+  });
+
+  // Botón limpiar filtros
+  btnResetFiltro?.addEventListener('click', () => {
+    selectedFilter = 'ALL';
+    if (searchInput) searchInput.value = '';
+    applyFilters();
   });
 
   searchInput?.addEventListener('input', applyFilters);
