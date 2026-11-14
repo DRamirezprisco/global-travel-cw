@@ -394,15 +394,24 @@ const statusCounts = activeStatuses.reduce(
               />
             </div>
 
-            <div class="pt-2 border-t border-base-border flex justify-end">
+            <div class="pt-2.5 border-t border-base-border flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-apply-quick-filters"
+                title="Aplicar filtros seleccionados y cerrar"
+                class="flex-1 justify-center rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>✅</span>
+                <span>Aplicar Filtros</span>
+              </button>
               <button
                 type="button"
                 id="btn-clear-quick-filters"
                 title="Limpiar todos los filtros"
-                class="w-full justify-center rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                class="rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <span>🧹</span>
-                <span>Limpiar Filtros</span>
+                <span>Limpiar</span>
               </button>
             </div>
           </div>
@@ -1174,6 +1183,7 @@ const statusCounts = activeStatuses.reduce(
   const filterLocalizadorText = document.querySelector<HTMLInputElement>('#filter-localizador-text');
 
   const datalistAerolineas = document.querySelector<HTMLDataListElement>('#datalist-filter-aerolineas');
+  const btnApplyQuickFilters = document.querySelector<HTMLButtonElement>('#btn-apply-quick-filters');
   const btnClearQuickFilters = document.querySelector<HTMLButtonElement>('#btn-clear-quick-filters');
   const btnCloseQuickFilters = document.querySelector<HTMLButtonElement>('#btn-close-quick-filters');
 
@@ -1824,7 +1834,8 @@ const statusCounts = activeStatuses.reduce(
     }, 20);
   }
 
-  btnToggleStatusMenu?.addEventListener('click', () => {
+  btnToggleStatusMenu?.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (!panelStatusPendientes) return;
     const willOpen = panelStatusPendientes.classList.contains('hidden');
     if (willOpen) {
@@ -1839,7 +1850,12 @@ const statusCounts = activeStatuses.reduce(
     applyFilters();
   });
 
-  btnToggleHamburger?.addEventListener('click', () => {
+  panelStatusPendientes?.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  btnToggleHamburger?.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (!panelFiltrosPendientes) return;
     const willOpen = panelFiltrosPendientes.classList.contains('hidden');
     if (willOpen) {
@@ -1852,6 +1868,10 @@ const statusCounts = activeStatuses.reduce(
       btnToggleHamburger.setAttribute('aria-expanded', 'false');
     }
     applyFilters();
+  });
+
+  panelFiltrosPendientes?.addEventListener('click', (e) => {
+    e.stopPropagation();
   });
 
   function closeFiltrosPendientes() {
@@ -1886,12 +1906,16 @@ const statusCounts = activeStatuses.reduce(
       filterVueloText.value = `${d}/${m}/${y.slice(-2)}`;
       isHoyMode = false;
       selectedStatus = 'ALL';
+      applyFilters();
+      updateSelectionUI();
+      window.setTimeout(() => {
+        closeFiltrosPendientes();
+      }, 150);
     } else if (!iso && filterVueloText) {
       filterVueloText.value = '';
+      applyFilters();
+      updateSelectionUI();
     }
-    applyFilters();
-    updateSelectionUI();
-    closeFiltrosPendientes();
   });
 
   filterEmisionText?.addEventListener('input', () => {
@@ -1909,12 +1933,16 @@ const statusCounts = activeStatuses.reduce(
       const [y, m, d] = iso.split('-');
       filterEmisionText.value = `${d}/${m}/${y.slice(-2)}`;
       isHoyMode = false;
+      applyFilters();
+      updateSelectionUI();
+      window.setTimeout(() => {
+        closeFiltrosPendientes();
+      }, 150);
     } else if (!iso && filterEmisionText) {
       filterEmisionText.value = '';
+      applyFilters();
+      updateSelectionUI();
     }
-    applyFilters();
-    updateSelectionUI();
-    closeFiltrosPendientes();
   });
 
   filterAerolineaText?.addEventListener('input', () => {
@@ -1927,7 +1955,7 @@ const statusCounts = activeStatuses.reduce(
     updateSelectionUI();
   });
 
-  // Al elegir o presionar Enter en los campos de texto del filtro, aplicar y cerrar automáticamente
+  // Al presionar Enter en los campos de texto del filtro, aplicar y cerrar automáticamente
   [filterVueloText, filterEmisionText, filterAerolineaText, filterLocalizadorText].forEach((inp) => {
     inp?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1937,14 +1965,17 @@ const statusCounts = activeStatuses.reduce(
         closeFiltrosPendientes();
       }
     });
-    inp?.addEventListener('change', () => {
-      applyFilters();
-      updateSelectionUI();
-      closeFiltrosPendientes();
-    });
   });
 
-  btnClearStatusFilters?.addEventListener('click', () => {
+  btnApplyQuickFilters?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    applyFilters();
+    updateSelectionUI();
+    closeFiltrosPendientes();
+  });
+
+  btnClearStatusFilters?.addEventListener('click', (e) => {
+    e.stopPropagation();
     selectedStatus = 'ALL';
     isHoyMode = false;
     closeStatusPendientes();
@@ -1952,19 +1983,22 @@ const statusCounts = activeStatuses.reduce(
     updateSelectionUI();
   });
 
-  btnCloseStatusFilters?.addEventListener('click', () => {
+  btnCloseStatusFilters?.addEventListener('click', (e) => {
+    e.stopPropagation();
     closeStatusPendientes();
     applyFilters();
   });
 
-  btnClearQuickFilters?.addEventListener('click', () => {
+  btnClearQuickFilters?.addEventListener('click', (e) => {
+    e.stopPropagation();
     clearAllQuickFilters();
     applyFilters();
     updateSelectionUI();
     closeFiltrosPendientes();
   });
 
-  btnCloseQuickFilters?.addEventListener('click', () => {
+  btnCloseQuickFilters?.addEventListener('click', (e) => {
+    e.stopPropagation();
     closeFiltrosPendientes();
     applyFilters();
   });
