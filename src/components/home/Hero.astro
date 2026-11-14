@@ -78,7 +78,7 @@ const statusCounts = activeStatuses.reduce(
     <!-- Contenedor responsive: Arriba buscador, en el centro botones, abajo texto de cantidades en mobile -->
     <div class="flex flex-col sm:flex-row-reverse sm:items-center sm:justify-between gap-2 pt-0.5">
       <!-- 2. En el centro (en mobile) / A la derecha (en desktop): Los botones -->
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap overflow-x-auto sm:overflow-visible no-scrollbar py-0.5">
         <button
           type="button"
           id="btn-delete-selected-pendientes"
@@ -394,24 +394,15 @@ const statusCounts = activeStatuses.reduce(
               />
             </div>
 
-            <div class="pt-2.5 border-t border-base-border flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-apply-quick-filters"
-                title="Aplicar filtros seleccionados y cerrar"
-                class="flex-1 justify-center rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>✅</span>
-                <span>Aplicar Filtros</span>
-              </button>
+            <div class="pt-2 border-t border-base-border flex justify-end">
               <button
                 type="button"
                 id="btn-clear-quick-filters"
                 title="Limpiar todos los filtros"
-                class="rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                class="w-full justify-center rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
               >
                 <span>🧹</span>
-                <span>Limpiar</span>
+                <span>Limpiar Filtros</span>
               </button>
             </div>
           </div>
@@ -1183,7 +1174,6 @@ const statusCounts = activeStatuses.reduce(
   const filterLocalizadorText = document.querySelector<HTMLInputElement>('#filter-localizador-text');
 
   const datalistAerolineas = document.querySelector<HTMLDataListElement>('#datalist-filter-aerolineas');
-  const btnApplyQuickFilters = document.querySelector<HTMLButtonElement>('#btn-apply-quick-filters');
   const btnClearQuickFilters = document.querySelector<HTMLButtonElement>('#btn-clear-quick-filters');
   const btnCloseQuickFilters = document.querySelector<HTMLButtonElement>('#btn-close-quick-filters');
 
@@ -1458,24 +1448,26 @@ const statusCounts = activeStatuses.reduce(
     return false;
   }
 
+  const knownAirlinesSet = new Set<string>(
+    KNOWN_AIRLINES.map((a) => a.toUpperCase())
+  );
+
   function populateQuickFilterDatalists() {
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
-    const airlinesSet = new Set<string>(
-      KNOWN_AIRLINES.map((a) => a.toUpperCase())
-    );
+    KNOWN_AIRLINES.forEach((a) => knownAirlinesSet.add(a.toUpperCase()));
 
     for (const row of rows) {
       try {
         const rec = JSON.parse(row.dataset.rowRecord || '') as ClienteRecord;
         const parsed = parseCodigo(rec.codigo || '', rec);
         const aero = (rec.aerolinea && rec.aerolinea !== '-' ? rec.aerolinea : parsed.aerolinea).trim();
-        if (aero && aero !== '-') airlinesSet.add(aero.toUpperCase());
+        if (aero && aero !== '-') knownAirlinesSet.add(aero.toUpperCase());
       } catch {}
     }
 
     if (datalistAerolineas) {
-      datalistAerolineas.innerHTML = Array.from(airlinesSet)
+      datalistAerolineas.innerHTML = Array.from(knownAirlinesSet)
         .sort((a, b) => a.localeCompare(b, 'es'))
         .map((a) => `<option value="${a}"></option>`)
         .join('');
@@ -1847,7 +1839,6 @@ const statusCounts = activeStatuses.reduce(
       panelStatusPendientes.classList.add('hidden');
       btnToggleStatusMenu.setAttribute('aria-expanded', 'false');
     }
-    applyFilters();
   });
 
   panelStatusPendientes?.addEventListener('click', (e) => {
@@ -1867,7 +1858,6 @@ const statusCounts = activeStatuses.reduce(
       panelFiltrosPendientes.classList.add('hidden');
       btnToggleHamburger.setAttribute('aria-expanded', 'false');
     }
-    applyFilters();
   });
 
   panelFiltrosPendientes?.addEventListener('click', (e) => {
@@ -1889,6 +1879,13 @@ const statusCounts = activeStatuses.reduce(
   btnFilterAerolinea?.addEventListener('click', () => focusQuickFilterInput('aerolinea'));
   btnFilterLocalizador?.addEventListener('click', () => focusQuickFilterInput('localizador'));
 
+  let isPickingDate = false;
+  [filterVueloDate, filterEmisionDate].forEach((d) => {
+    d?.addEventListener('pointerdown', () => { isPickingDate = true; });
+    d?.addEventListener('focus', () => { isPickingDate = true; });
+    d?.addEventListener('blur', () => { window.setTimeout(() => { isPickingDate = false; }, 300); });
+  });
+
   filterVueloText?.addEventListener('input', () => {
     if (filterVueloDate) filterVueloDate.value = '';
     if (filterVueloText.value.trim()) {
@@ -1899,23 +1896,29 @@ const statusCounts = activeStatuses.reduce(
     updateSelectionUI();
   });
 
+  filterVueloText?.addEventListener('change', () => {
+    if (isPickingDate) return;
+    if (filterVueloText.value.trim()) {
+      applyFilters();
+      updateSelectionUI();
+      closeFiltrosPendientes();
+    }
+  });
+
   filterVueloDate?.addEventListener('change', () => {
+    isPickingDate = false;
     const iso = filterVueloDate.value;
     if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && filterVueloText) {
       const [y, m, d] = iso.split('-');
       filterVueloText.value = `${d}/${m}/${y.slice(-2)}`;
       isHoyMode = false;
       selectedStatus = 'ALL';
-      applyFilters();
-      updateSelectionUI();
-      window.setTimeout(() => {
-        closeFiltrosPendientes();
-      }, 150);
     } else if (!iso && filterVueloText) {
       filterVueloText.value = '';
-      applyFilters();
-      updateSelectionUI();
     }
+    applyFilters();
+    updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   filterEmisionText?.addEventListener('input', () => {
@@ -1927,32 +1930,56 @@ const statusCounts = activeStatuses.reduce(
     updateSelectionUI();
   });
 
+  filterEmisionText?.addEventListener('change', () => {
+    if (isPickingDate) return;
+    if (filterEmisionText.value.trim()) {
+      applyFilters();
+      updateSelectionUI();
+      closeFiltrosPendientes();
+    }
+  });
+
   filterEmisionDate?.addEventListener('change', () => {
+    isPickingDate = false;
     const iso = filterEmisionDate.value;
     if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && filterEmisionText) {
       const [y, m, d] = iso.split('-');
       filterEmisionText.value = `${d}/${m}/${y.slice(-2)}`;
       isHoyMode = false;
-      applyFilters();
-      updateSelectionUI();
-      window.setTimeout(() => {
-        closeFiltrosPendientes();
-      }, 150);
     } else if (!iso && filterEmisionText) {
       filterEmisionText.value = '';
-      applyFilters();
-      updateSelectionUI();
     }
+    applyFilters();
+    updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   filterAerolineaText?.addEventListener('input', () => {
     applyFilters();
     updateSelectionUI();
+    const val = filterAerolineaText.value.trim().toUpperCase();
+    if (val && knownAirlinesSet.has(val)) {
+      closeFiltrosPendientes();
+    }
+  });
+
+  filterAerolineaText?.addEventListener('change', () => {
+    applyFilters();
+    updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   filterLocalizadorText?.addEventListener('input', () => {
     applyFilters();
     updateSelectionUI();
+  });
+
+  filterLocalizadorText?.addEventListener('change', () => {
+    if (filterLocalizadorText.value.trim()) {
+      applyFilters();
+      updateSelectionUI();
+      closeFiltrosPendientes();
+    }
   });
 
   // Al presionar Enter en los campos de texto del filtro, aplicar y cerrar automáticamente
@@ -1965,13 +1992,6 @@ const statusCounts = activeStatuses.reduce(
         closeFiltrosPendientes();
       }
     });
-  });
-
-  btnApplyQuickFilters?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    applyFilters();
-    updateSelectionUI();
-    closeFiltrosPendientes();
   });
 
   btnClearStatusFilters?.addEventListener('click', (e) => {
