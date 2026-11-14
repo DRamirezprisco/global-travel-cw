@@ -1854,6 +1854,16 @@ const statusCounts = activeStatuses.reduce(
     applyFilters();
   });
 
+  function closeFiltrosPendientes() {
+    panelFiltrosPendientes?.classList.add('hidden');
+    btnToggleHamburger?.setAttribute('aria-expanded', 'false');
+  }
+
+  function closeStatusPendientes() {
+    panelStatusPendientes?.classList.add('hidden');
+    btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
+  }
+
   btnFilterVuelo?.addEventListener('click', () => focusQuickFilterInput('vuelo'));
   btnFilterEmision?.addEventListener('click', () => focusQuickFilterInput('emision'));
   btnFilterAerolinea?.addEventListener('click', () => focusQuickFilterInput('aerolinea'));
@@ -1881,6 +1891,7 @@ const statusCounts = activeStatuses.reduce(
     }
     applyFilters();
     updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   filterEmisionText?.addEventListener('input', () => {
@@ -1903,6 +1914,7 @@ const statusCounts = activeStatuses.reduce(
     }
     applyFilters();
     updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   filterAerolineaText?.addEventListener('input', () => {
@@ -1915,16 +1927,33 @@ const statusCounts = activeStatuses.reduce(
     updateSelectionUI();
   });
 
+  // Al elegir o presionar Enter en los campos de texto del filtro, aplicar y cerrar automáticamente
+  [filterVueloText, filterEmisionText, filterAerolineaText, filterLocalizadorText].forEach((inp) => {
+    inp?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyFilters();
+        updateSelectionUI();
+        closeFiltrosPendientes();
+      }
+    });
+    inp?.addEventListener('change', () => {
+      applyFilters();
+      updateSelectionUI();
+      closeFiltrosPendientes();
+    });
+  });
+
   btnClearStatusFilters?.addEventListener('click', () => {
     selectedStatus = 'ALL';
     isHoyMode = false;
+    closeStatusPendientes();
     applyFilters();
     updateSelectionUI();
   });
 
   btnCloseStatusFilters?.addEventListener('click', () => {
-    panelStatusPendientes?.classList.add('hidden');
-    btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
+    closeStatusPendientes();
     applyFilters();
   });
 
@@ -1932,11 +1961,11 @@ const statusCounts = activeStatuses.reduce(
     clearAllQuickFilters();
     applyFilters();
     updateSelectionUI();
+    closeFiltrosPendientes();
   });
 
   btnCloseQuickFilters?.addEventListener('click', () => {
-    panelFiltrosPendientes?.classList.add('hidden');
-    btnToggleHamburger?.setAttribute('aria-expanded', 'false');
+    closeFiltrosPendientes();
     applyFilters();
   });
 
