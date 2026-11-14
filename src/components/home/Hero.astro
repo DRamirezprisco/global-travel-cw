@@ -75,22 +75,10 @@ const statusCounts = activeStatuses.reduce(
       />
     </div>
 
-    <!-- Fila 2 debajo del buscador: Contador a la izquierda + Botones compactos a la derecha en una sola fila -->
-    <div class="flex items-center justify-between gap-1.5 sm:gap-3 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
-      <div class="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-primary whitespace-nowrap shrink-0">
-        <span id="visible-rows-counter">
-          Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
-        </span>
-        <span
-          id="d1-sync-toast"
-          class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-1.5 py-0.5 text-[10px] font-bold"
-        >
-          Guardado en D1
-        </span>
-      </div>
-
-      <!-- Botones compactos en una sola fila -->
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap">
+    <!-- Contenedor responsive: Arriba buscador, en el centro botones, abajo texto de cantidades en mobile -->
+    <div class="flex flex-col sm:flex-row-reverse sm:items-center sm:justify-between gap-2 pt-0.5">
+      <!-- 2. En el centro (en mobile) / A la derecha (en desktop): Los botones -->
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
         <button
           type="button"
           id="btn-delete-selected-pendientes"
@@ -420,6 +408,19 @@ const statusCounts = activeStatuses.reduce(
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 3. Abajo (en mobile) / A la izquierda (en desktop): El texto de las cantidades -->
+    <div class="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-primary whitespace-nowrap shrink-0">
+      <span id="visible-rows-counter">
+        Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
+      </span>
+      <span
+        id="d1-sync-toast"
+        class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-1.5 py-0.5 text-[10px] font-bold"
+      >
+        Guardado en D1
+      </span>
     </div>
   </div>
 </div>
