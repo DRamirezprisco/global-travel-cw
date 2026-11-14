@@ -614,24 +614,23 @@ export function buildOperationalReport(data: ReportDataPayload): BuiltOperationa
 }
 
 /**
- * Construye el reporte exclusivo para PDF según el orden solicitado:
- * 1. Lista del menú de Notas como prioritario
- * 2. Tabla de Reservas por 24h y Cotizaciones Pendientes
+ * Reporte Operativo de Pendientes (Descargado desde Pendientes / Home)
+ * 1. Lista del menú de notas como prioritario (sin corchetes: Listo / Pendiente)
+ * 2. Tabla de las reservas por 24h y cotizaciones pendientes (primero 24h y luego cotizaciones)
+ *    Columnas: Contacto/Cliente, Fecha Gestión, Aerolínea, Localizador, Fecha Vuelo
  * 3. Tabla de CAMBIO TICKETS
- * 4. Tabla de Visas emitidas de la semana si existe (filtrando desde 5 días antes de la fecha de emisión del PDF tomando fecha_gestion en formato DD/MM/YYYY)
- * 5. Tabla para CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES
+ *    Columnas: Contacto/Cliente, Fecha Gestión, Observación/Seguimiento, Ruta/Datos del Vuelo
  */
-export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperationalReport {
-  const { pendientes = [], pagos = [], notas = [] } = data;
+export function buildPdfPendientesReport(data: ReportDataPayload): BuiltOperationalReport {
+  const { pendientes = [], notas = [] } = data;
   const refNow = new Date();
   const {
-    display: emissionDateDDMMYYYY,
     longSpanish: emissionDateLong,
     slug: dateSlug,
   } = getTodayDisplayAndSlug(refNow);
   const responsibleName = 'Daniela Ramírez';
 
-  // 1. LISTA DEL MENÚ DE NOTAS COMO PRIORITARIO
+  // 1. LISTA DEL MENÚ DE NOTAS COMO PRIORITARIO (sin corchetes)
   const sortedNotas = [...notas].sort((a, b) => Number(a.completada) - Number(b.completada));
   const sectionNotas: ReportSectionTable = {
     sheetName: 'Notas Prioritarias',
@@ -641,55 +640,41 @@ export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperati
       sortedNotas.length > 0
         ? sortedNotas.map((n, idx) => [
             String(idx + 1),
-            n.completada ? '[X] Listo' : '[ ] Pendiente',
+            n.completada ? 'Listo' : 'Pendiente',
             n.texto || '-',
           ])
         : [['-', '-', 'Sin notas registradas en el check list']],
   };
 
   // 2. TABLA DE RESERVAS POR 24H Y COTIZACIONES PENDIENTES
-  const reservasYCotizaciones = pendientes.filter(
-    (p) => p.status === 'Reserva por 24h' || p.status === 'Pendiente Cotizacion'
-  );
+  // Primero las reservas de 24H y luego cotizaciones pendientes
+  const reservas24h = pendientes.filter((p) => p.status === 'Reserva por 24h');
+  const cotizacionesPend = pendientes.filter((p) => p.status === 'Pendiente Cotizacion');
+  const reservasYCotizaciones = [...reservas24h, ...cotizacionesPend];
+
   const sectionReservasYCotizaciones: ReportSectionTable = {
     sheetName: 'Reservas 24h y Cotizaciones',
     title: 'RESERVAS POR 24H Y COTIZACIONES PENDIENTES',
     headers: [
       'Contacto / Cliente',
       'Fecha Gestión',
-      'Aerolínea / Código PNR',
-      'Fecha Vuelo / Ruta',
-      'Observaciones / Estado',
-      'Precio',
-      'Abono',
-      'Ganancia',
-      'Estatus',
+      'Aerolínea',
+      'Localizador',
+      'Fecha Vuelo',
     ],
     rows:
       reservasYCotizaciones.length > 0
         ? reservasYCotizaciones.map((item) => {
             const parts = extractCodigoParts(item);
-            const aeroPnr =
-              parts.aerolinea !== '-' && parts.localizador !== '-'
-                ? `${parts.aerolinea} (${parts.localizador})`
-                : parts.aerolinea !== '-'
-                  ? parts.aerolinea
-                  : parts.localizador !== '-'
-                    ? parts.localizador
-                    : item.codigo || '-';
             return [
               item.contacto || '-',
               item.fecha_gestion || '-',
-              aeroPnr,
+              parts.aerolinea !== '-' ? parts.aerolinea : '-',
+              parts.localizador !== '-' ? parts.localizador : (item.codigo || '-'),
               item.solicitud_vuelo || '-',
-              item.observacion || '-',
-              item.monto || '-',
-              item.abono || '-',
-              item.ganancia || '-',
-              item.status,
             ];
           })
-        : [['Sin reservas por 24h ni cotizaciones pendientes', '-', '-', '-', '-', '-', '-', '-', '-']],
+        : [['Sin reservas por 24h ni cotizaciones pendientes', '-', '-', '-', '-']],
   };
 
   // 3. TABLA DE CAMBIO TICKETS
@@ -700,30 +685,56 @@ export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperati
     headers: [
       'Contacto / Cliente',
       'Fecha Gestión',
-      'Ruta / Datos del Vuelo',
       'Observación / Seguimiento',
-      'Precio',
-      'Abono',
-      'Ganancia',
-      'Estatus',
+      'Ruta / Datos del Vuelo',
     ],
     rows:
       cambiosList.length > 0
         ? cambiosList.map((item) => [
             item.contacto || '-',
             item.fecha_gestion || '-',
-            item.solicitud_vuelo || '-',
             item.observacion || '-',
-            item.monto || '-',
-            item.abono || '-',
-            item.ganancia || '-',
-            item.status,
+            item.solicitud_vuelo || '-',
           ])
-        : [['Sin registros en Cambio Tickets', '-', '-', '-', '-', '-', '-', 'Cambio Tickets']],
+        : [['Sin registros en Cambio Tickets', '-', '-', '-']],
   };
 
-  // 4. TABLA DE VISAS EMITIDAS DE LA SEMANA SI EXISTE
-  // Filtra desde 5 días antes de la fecha de emisión del reporte en PDF tomando fecha_gestion en formato DD/MM/YYYY
+  const sections: ReportSectionTable[] = [
+    sectionNotas,
+    sectionReservasYCotizaciones,
+    sectionCambioTickets,
+  ];
+
+  return {
+    mainTitle: 'REPORTE STATUS - PENDIENTES',
+    subTitle: `Fecha Emisión: ${emissionDateLong} | Responsable: ${responsibleName}`,
+    emissionDateLong,
+    responsibleName,
+    dateSlug,
+    sections,
+  };
+}
+
+/**
+ * Reporte Operativo de Cobranzas y Pagos (Descargado desde Pagos)
+ * 1. Tabla de visas emitidas de la semana si existe (últimos 5 días antes de la fecha de emisión en DD/MM/YYYY)
+ * 2. Tablas para CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES filtradas por estatus:
+ *    - Tabla para Demorados
+ *    - Tabla para Pendiente
+ *    - Tabla para Abono
+ *    (se excluye el filtro de Pagado)
+ */
+export function buildPdfCobranzasReport(data: ReportDataPayload): BuiltOperationalReport {
+  const { pendientes = [], pagos = [] } = data;
+  const refNow = new Date();
+  const {
+    display: emissionDateDDMMYYYY,
+    longSpanish: emissionDateLong,
+    slug: dateSlug,
+  } = getTodayDisplayAndSlug(refNow);
+  const responsibleName = 'Daniela Ramírez';
+
+  // 1. TABLA DE VISAS EMITIDAS DE LA SEMANA SI EXISTE (últimos 5 días)
   const reportMidnight = createMidnightDate(
     refNow.getFullYear(),
     refNow.getMonth() + 1,
@@ -757,13 +768,12 @@ export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperati
           title: `VISAS EMITIDAS DE LA SEMANA (${fiveDaysAgoFormatted} AL ${emissionDateDDMMYYYY})`,
           headers: [
             'Contacto / Cliente',
-            'Fecha Gestión (DD/MM/YYYY)',
+            'Fecha Gestión',
             'Ruta / Detalle',
             'Observación / Seguimiento',
             'Precio',
             'Abono',
             'Ganancia',
-            'Estatus',
           ],
           rows: visasSemana.map(({ item, parsedFecha }) => [
             item.contacto || '-',
@@ -773,17 +783,20 @@ export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperati
             item.monto || '-',
             item.abono || '-',
             item.ganancia || '-',
-            item.status,
           ]),
         }
       : null;
 
-  // 5. TABLA PARA CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES
-  let subtotalUsdPendiente = 0;
-  let subtotalFlsPendiente = 0;
+  // 2. TABLAS DE CONTROL DE COBRANZAS POR ESTATUS (Demorados, Pendiente, Abono)
+  function buildCobranzasStatusSection(
+    sheetName: string,
+    title: string,
+    items: PagoRecord[]
+  ): ReportSectionTable {
+    let subtotalUsd = 0;
+    let subtotalFls = 0;
 
-  for (const p of pagos) {
-    if (p.status !== 'Pagado') {
+    for (const p of items) {
       const montoTotal = parseMontoNumeric(p.monto);
       const abonoVal = parseMontoNumeric(p.abono || '');
       const saldoRestante =
@@ -792,86 +805,145 @@ export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperati
           : montoTotal;
       const curr = detectCurrency(p.monto, p.moneda);
       if (curr === 'USD') {
-        subtotalUsdPendiente += saldoRestante;
+        subtotalUsd += saldoRestante;
       } else {
-        subtotalFlsPendiente += saldoRestante;
+        subtotalFls += saldoRestante;
       }
     }
-  }
 
-  const sectionPagos: ReportSectionTable = {
-    sheetName: 'Cobranzas y Pagos',
-    title: 'CONTROL DE COBRANZAS, CRÉDITOS Y PAGOS PENDIENTES',
-    headers: [
+    const headers = [
       'Contacto / Cliente',
-      'Fecha Ref.',
-      'Cód. Factura / PNR / Concepto',
+      'Fecha',
+      'Concepto / Servicio',
       'Precio Total',
       'Abono',
-      'Ganancia',
+      'Saldo Pendiente',
       'Moneda',
-      'Estado de Pago / Acuerdo',
-      'Observaciones / Acción',
-    ],
-    rows:
-      pagos.length > 0
-        ? pagos.map((p) => {
+      'Observación / Acción',
+    ];
+
+    const rows: string[][] =
+      items.length > 0
+        ? items.map((p) => {
             const curr = detectCurrency(p.monto, p.moneda);
+            const montoTotal = parseMontoNumeric(p.monto);
+            const abonoVal = parseMontoNumeric(p.abono || '');
+            const saldoRestante =
+              montoTotal > 0 && abonoVal > 0 && abonoVal < montoTotal
+                ? montoTotal - abonoVal
+                : montoTotal;
+            const saldoStr =
+              saldoRestante > 0
+                ? curr === 'USD'
+                  ? `$ ${saldoRestante.toFixed(2)}`
+                  : `${saldoRestante.toFixed(2)} Fls`
+                : '-';
             return [
               p.contacto || '-',
               p.fecha_gestion || '-',
-              p.solicitud_vuelo && p.solicitud_vuelo !== '-' ? p.solicitud_vuelo : p.codigo || '-',
+              p.solicitud_vuelo && p.solicitud_vuelo !== '-'
+                ? p.solicitud_vuelo
+                : p.codigo || '-',
               p.monto || '-',
-              p.abono || '-',
-              p.ganancia || '-',
+              p.abono && p.abono !== '-' ? p.abono : '-',
+              saldoStr,
               curr === 'USD' ? '$ (USD)' : 'Fls',
-              p.status,
               p.observacion || '-',
             ];
           })
-        : [['Sin registros de cobranzas', '-', '-', '-', '-', '-', '-', '-', '-']],
-    footerRows: [
-      [
-        '',
-        '',
-        'SUBTOTAL USD ($) PENDIENTE POR COBRAR:',
-        `${subtotalUsdPendiente.toFixed(2)} $`,
-        '',
-        '',
-        '$',
-        '',
-        '',
-      ],
-      [
-        '',
-        '',
-        'SUBTOTAL FLS PENDIENTE POR COBRAR:',
-        `${subtotalFlsPendiente.toFixed(2)} Fls`,
-        '',
-        '',
-        'Fls',
-        '',
-        '',
-      ],
-    ],
-  };
+        : [['Sin registros en este estatus', '-', '-', '-', '-', '-', '-', '-']];
 
-  const pdfSections: ReportSectionTable[] = [
-    sectionNotas,
-    sectionReservasYCotizaciones,
-    sectionCambioTickets,
+    const footerRows: string[][] = [];
+    if (items.length > 0) {
+      if (subtotalUsd > 0) {
+        footerRows.push([
+          '',
+          '',
+          'SUBTOTAL USD ($) PENDIENTE:',
+          '',
+          '',
+          `${subtotalUsd.toFixed(2)} $`,
+          'USD',
+          '',
+        ]);
+      }
+      if (subtotalFls > 0) {
+        footerRows.push([
+          '',
+          '',
+          'SUBTOTAL FLS PENDIENTE:',
+          '',
+          '',
+          `${subtotalFls.toFixed(2)} Fls`,
+          'Fls',
+          '',
+        ]);
+      }
+      if (subtotalUsd === 0 && subtotalFls === 0) {
+        footerRows.push([
+          '',
+          '',
+          'TOTAL PENDIENTE:',
+          '',
+          '',
+          '0.00',
+          '-',
+          '',
+        ]);
+      }
+    }
+
+    return {
+      sheetName,
+      title,
+      headers,
+      rows,
+      footerRows,
+    };
+  }
+
+  const demoradosList = pagos.filter((p) => p.status === 'Demorados');
+  const pendientesList = pagos.filter((p) => p.status === 'Pendiente');
+  const abonosList = pagos.filter((p) => p.status === 'Abono');
+
+  const sectionDemorados = buildCobranzasStatusSection(
+    'Demorados',
+    'CONTROL DE COBRANZAS - PAGOS DEMORADOS (VENCIDOS)',
+    demoradosList
+  );
+  const sectionPendientes = buildCobranzasStatusSection(
+    'Pendientes',
+    'CONTROL DE COBRANZAS - PAGOS PENDIENTES',
+    pendientesList
+  );
+  const sectionAbonos = buildCobranzasStatusSection(
+    'Abonos',
+    'CONTROL DE COBRANZAS - PAGOS CON ABONO',
+    abonosList
+  );
+
+  const sections: ReportSectionTable[] = [
     ...(sectionVisasSemana ? [sectionVisasSemana] : []),
-    sectionPagos,
+    sectionDemorados,
+    sectionPendientes,
+    sectionAbonos,
   ];
 
   return {
-    mainTitle: 'REPORTE STATUS - GLOBAL TRAVEL CW. WILLEMSTAD. CURACAO',
+    mainTitle: 'REPORTE STATUS - COBRANZAS Y PAGOS',
     subTitle: `Fecha Emisión: ${emissionDateLong} | Responsable: ${responsibleName}`,
     emissionDateLong,
     responsibleName,
     dateSlug,
-    sections: pdfSections,
+    sections,
   };
+}
+
+/**
+ * Reporte Operativo General (Compatibilidad)
+ */
+export function buildPdfOperationalReport(data: ReportDataPayload): BuiltOperationalReport {
+  return buildPdfPendientesReport(data);
 }
 
 // ============================================================================
@@ -1449,17 +1521,20 @@ function buildPdfBytes(
     if (colCount === 3) {
       return [0.08, 0.18, 0.74].map((w) => w * usableWidth);
     }
+    if (colCount === 4) {
+      return [0.26, 0.14, 0.32, 0.28].map((w) => w * usableWidth);
+    }
     if (colCount === 5) {
-      return [0.24, 0.1, 0.3, 0.18, 0.18].map((w) => w * usableWidth);
+      return [0.26, 0.14, 0.18, 0.18, 0.24].map((w) => w * usableWidth);
     }
     if (colCount === 6) {
       return [0.2, 0.11, 0.23, 0.22, 0.14, 0.1].map((w) => w * usableWidth);
     }
     if (colCount === 7) {
-      return [0.18, 0.11, 0.18, 0.09, 0.16, 0.16, 0.12].map((w) => w * usableWidth);
+      return [0.18, 0.12, 0.20, 0.20, 0.10, 0.10, 0.10].map((w) => w * usableWidth);
     }
     if (colCount === 8) {
-      return [0.18, 0.09, 0.18, 0.2, 0.09, 0.09, 0.09, 0.08].map((w) => w * usableWidth);
+      return [0.20, 0.09, 0.18, 0.09, 0.08, 0.10, 0.06, 0.20].map((w) => w * usableWidth);
     }
     if (colCount === 9) {
       return [0.16, 0.08, 0.16, 0.09, 0.09, 0.09, 0.08, 0.11, 0.14].map(
@@ -1696,16 +1771,34 @@ export async function downloadOperationalReportExcel(): Promise<void> {
   );
 }
 
-export async function downloadOperationalReportPdf(): Promise<void> {
+export async function downloadPendientesReportPdf(): Promise<void> {
   const [payload, logoImage] = await Promise.all([
     fetchRawReportPayload(),
     loadLogoJpegForPdf(),
   ]);
-  const report = buildPdfOperationalReport(payload);
+  const report = buildPdfPendientesReport(payload);
   const pdfBytes = buildPdfBytes(report, logoImage);
   triggerBlobDownload(
     pdfBytes,
-    `Reporte_Operativo_Global_Travel_CW_${report.dateSlug}.pdf`,
+    `Reporte_Pendientes_Global_Travel_CW_${report.dateSlug}.pdf`,
     'application/pdf'
   );
+}
+
+export async function downloadCobranzasReportPdf(): Promise<void> {
+  const [payload, logoImage] = await Promise.all([
+    fetchRawReportPayload(),
+    loadLogoJpegForPdf(),
+  ]);
+  const report = buildPdfCobranzasReport(payload);
+  const pdfBytes = buildPdfBytes(report, logoImage);
+  triggerBlobDownload(
+    pdfBytes,
+    `Reporte_Cobranzas_Global_Travel_CW_${report.dateSlug}.pdf`,
+    'application/pdf'
+  );
+}
+
+export async function downloadOperationalReportPdf(): Promise<void> {
+  return downloadPendientesReportPdf();
 }

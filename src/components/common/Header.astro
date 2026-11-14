@@ -49,7 +49,8 @@ const { activeTab = 'pendientes' } = Astro.props;
 <script>
   import {
     downloadOperationalReportExcel,
-    downloadOperationalReportPdf,
+    downloadPendientesReportPdf,
+    downloadCobranzasReportPdf,
   } from '@/utils/reportExporter';
 
   document.addEventListener('click', async (event) => {
@@ -82,12 +83,17 @@ const { activeTab = 'pendientes' } = Astro.props;
     if (pdfBtn) {
       event.preventDefault();
       if (pdfBtn.disabled) return;
+      const reportType = (pdfBtn.dataset.exportPdf || '').toLowerCase();
       const label = pdfBtn.querySelector<HTMLElement>('[data-export-pdf-label]');
       const prevText = label?.textContent || 'PDF';
       pdfBtn.disabled = true;
       if (label) label.textContent = 'Generando...';
       try {
-        await downloadOperationalReportPdf();
+        if (reportType === 'cobranzas' || reportType === 'pagos') {
+          await downloadCobranzasReportPdf();
+        } else {
+          await downloadPendientesReportPdf();
+        }
       } catch (err) {
         alert(
           err instanceof Error
