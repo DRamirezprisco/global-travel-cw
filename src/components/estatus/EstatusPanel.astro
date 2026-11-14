@@ -132,11 +132,11 @@ const PRESET_COLORS = [
   id="modal-estatus"
   aria-labelledby="modal-estatus-title"
   {...({ closedby: 'any' } as any)}
-  class="m-auto w-full max-w-lg rounded-2xl border-2 border-primary bg-base p-0 text-primary shadow-2xl backdrop:bg-primary-dark/60"
+  class="m-auto w-[94vw] max-w-lg rounded-2xl border-2 border-primary bg-base p-0 text-primary shadow-2xl backdrop:bg-primary-dark/60 overflow-hidden"
 >
-  <form id="form-estatus" class="flex flex-col">
+  <form id="form-estatus" class="flex flex-col overflow-hidden">
     <!-- Cabecera del Modal -->
-    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base border-b-4 border-secondary">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-3.5 text-base border-b-4 border-secondary">
       <div>
         <h3 id="modal-estatus-title" class="text-base sm:text-lg font-extrabold">
           Editar Estatus
@@ -154,8 +154,8 @@ const PRESET_COLORS = [
       </button>
     </div>
 
-    <!-- Cuerpo del Formulario -->
-    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+    <!-- Cuerpo del Formulario (único contenedor con scroll) -->
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
       <input type="hidden" id="field-estatus-id" name="id" value="" />
 
       <!-- Nombre -->
@@ -264,7 +264,7 @@ const PRESET_COLORS = [
     </div>
 
     <!-- Pie del Modal: Eliminar a la izquierda, Cancelar y Guardar a la derecha -->
-    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <div>
         <button
           type="button"
@@ -556,16 +556,16 @@ const PRESET_COLORS = [
 
   // Cierre al hacer clic en el backdrop
   if (modal && !('closedBy' in HTMLDialogElement.prototype)) {
-    modal.addEventListener('click', (event) => {
-      if (event.target !== modal) return;
-      const rect = modal.getBoundingClientRect();
-      const isDialogContent =
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width;
-      if (isDialogContent) return;
-      modal.close();
+    const outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    modal.addEventListener('pointerdown', (e) => {
+      pressedOutside = outside(e, modal);
+    });
+    modal.addEventListener('pointerup', (e) => {
+      if (pressedOutside && outside(e, modal)) modal.close();
     });
   }
 </script>

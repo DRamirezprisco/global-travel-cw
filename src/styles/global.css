@@ -79,6 +79,25 @@
   --color-status-listanegra-border: #7f7f7f;
 }
 
+/* Reglas globales para Modales (<dialog>): un único scroll interno y botones inferiores siempre visibles */
+dialog:modal {
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+dialog:modal > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2.25rem);
+  overflow: hidden;
+}
+
 /* Responsive Data Table with Sticky Context & Container Queries */
 .table-wrapper {
   overflow: auto;

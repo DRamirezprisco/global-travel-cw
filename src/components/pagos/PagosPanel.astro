@@ -241,12 +241,13 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
 <!-- Modal / Diálogo para Ver o Editar Registro de Pago -->
 <dialog
   id="modal-pago"
-  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border border-base-border overflow-hidden"
+  {...({ closedby: 'any' } as any)}
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border-2 border-primary overflow-hidden"
   aria-labelledby="modal-pago-title"
 >
-  <form id="form-pago" method="dialog" class="flex flex-col">
+  <form id="form-pago" method="dialog" class="flex flex-col overflow-hidden">
     <!-- Cabecera del Modal -->
-    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-3.5 text-base border-b-4 border-secondary">
       <div>
         <h3 id="modal-pago-title" class="text-lg font-extrabold tracking-tight">
           Cliente
@@ -261,8 +262,8 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
       </button>
     </div>
 
-    <!-- Cuerpo del Formulario -->
-    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+    <!-- Cuerpo del Formulario (único contenedor con scroll) -->
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
       <input type="hidden" id="field-pago-id" name="id" value="" />
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -421,7 +422,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     </div>
 
     <!-- Pie del Modal con Botones -->
-    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <div>
         <button
           type="button"
@@ -462,12 +463,13 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
 <!-- Ventana Modal Específica: REGISTRAR PAGO -->
 <dialog
   id="modal-registrar-pago"
+  {...({ closedby: 'any' } as any)}
   class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-lg w-[92vw] border-2 border-emerald-600 overflow-hidden"
   aria-labelledby="modal-reg-pago-title"
 >
-  <form id="form-registrar-pago" class="flex flex-col">
+  <form id="form-registrar-pago" class="flex flex-col overflow-hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between bg-emerald-700 px-6 py-4 text-white">
+    <div class="shrink-0 flex items-center justify-between bg-emerald-700 px-6 py-3.5 text-white">
       <div>
         <h3 id="modal-reg-pago-title" class="text-base sm:text-lg font-extrabold flex items-center gap-2">
           <span>💳</span>
@@ -486,8 +488,8 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+    <!-- Body (único contenedor con scroll) -->
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
       <input type="hidden" id="reg-field-id" value="" />
 
       <!-- Tarjeta resumen cliente y deuda -->
@@ -562,7 +564,7 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-end gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-end gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <button
         type="button"
         id="btn-cancel-modal-reg-pago"
@@ -960,6 +962,23 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
 
   btnCloseModal?.addEventListener('click', () => modal?.close());
   btnCancelModal?.addEventListener('click', () => modal?.close());
+
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    const outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    for (const d of [modal, modalReg]) {
+      if (!d) continue;
+      let pressedOutside = false;
+      d.addEventListener('pointerdown', (e) => {
+        pressedOutside = outside(e, d);
+      });
+      d.addEventListener('pointerup', (e) => {
+        if (pressedOutside && outside(e, d)) d.close();
+      });
+    }
+  }
 
   // Eliminar pago
   btnDeleteModal?.addEventListener('click', async () => {

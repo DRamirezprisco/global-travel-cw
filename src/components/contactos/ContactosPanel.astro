@@ -345,12 +345,13 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 <!-- Modal para Ver / Editar / Crear Ficha de Contacto -->
 <dialog
   id="modal-contacto"
-  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border border-base-border overflow-hidden"
+  {...({ closedby: 'any' } as any)}
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border-2 border-primary overflow-hidden"
   aria-labelledby="modal-contacto-title"
 >
-  <form id="form-contacto" method="dialog" class="flex flex-col">
+  <form id="form-contacto" method="dialog" class="flex flex-col overflow-hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-3.5 text-base border-b-4 border-secondary">
       <div>
         <h3 id="modal-contacto-title" class="text-lg font-extrabold tracking-tight">
           Ficha de Contacto
@@ -368,8 +369,8 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+    <!-- Body (único contenedor con scroll) -->
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
       <input type="hidden" id="field-contacto-id" name="id" value="" />
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -408,7 +409,8 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
             Email
           </label>
           <input
-            type="email"
+            type="text"
+            inputmode="email"
             id="field-contacto-email"
             name="email"
             placeholder="cliente@ejemplo.com"
@@ -534,7 +536,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
     </div>
 
     <!-- Footer -->
-    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <div>
         <button
           type="button"
@@ -751,6 +753,20 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   btnCloseModal?.addEventListener('click', () => modal?.close());
   btnCancelModal?.addEventListener('click', () => modal?.close());
 
+  if (modal && !('closedBy' in HTMLDialogElement.prototype)) {
+    const outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    modal.addEventListener('pointerdown', (e) => {
+      pressedOutside = outside(e, modal);
+    });
+    modal.addEventListener('pointerup', (e) => {
+      if (pressedOutside && outside(e, modal)) modal.close();
+    });
+  }
+
   // Clic en fila para abrir modal (excepto botón de WhatsApp)
   tbody?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -856,7 +872,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
         body: JSON.stringify(payload),
       });
 
-      const result = (await response.json()) as { ok?: boolean; data?: ContactoRecord };
+      const result = (await response.json()) as { ok?: boolean; data?: ContactoRecord; error?: string };
 
       if (response.ok && result.ok && result.data) {
         const updated = result.data;
@@ -935,7 +951,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
         modal?.close();
         showSyncToast(`Contacto #${updated.id} guardado en D1`);
       } else {
-        alert('Error al guardar el contacto.');
+        alert(result.error || 'Error al guardar el contacto.');
       }
     } catch {
       alert('Error de conexión al guardar el contacto.');

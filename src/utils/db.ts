@@ -347,6 +347,15 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
       await db.prepare('ALTER TABLE pendientes ADD COLUMN status_id INTEGER REFERENCES estatus(id)').run();
     } catch {}
     try {
+      await db.prepare("ALTER TABLE pendientes ADD COLUMN aerolinea TEXT DEFAULT '-'").run();
+    } catch {}
+    try {
+      await db.prepare("ALTER TABLE pendientes ADD COLUMN localizador TEXT DEFAULT '-'").run();
+    } catch {}
+    try {
+      await db.prepare("ALTER TABLE pendientes ADD COLUMN apellidos TEXT DEFAULT '-'").run();
+    } catch {}
+    try {
       await db.prepare("ALTER TABLE pendientes ADD COLUMN abono TEXT NOT NULL DEFAULT '-'").run();
     } catch {}
     try {
@@ -606,6 +615,28 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
         )`
       )
       .run();
+
+    // Asegurar migración de columnas e índice único en contactos si la tabla fue creada previamente
+    const contactoAlterColumns = [
+      "ALTER TABLE contactos ADD COLUMN telefono TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN email TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN nombres TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN apellidos TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN fecha_nacimiento TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN numero_pasaporte TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN nacionalidad_pasaporte TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN genero TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN fecha_emision_pasaporte TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN fecha_vencimiento_pasaporte TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))",
+      "ALTER TABLE contactos ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))",
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_contactos_contacto ON contactos(contacto)',
+    ];
+    for (const stmt of contactoAlterColumns) {
+      try {
+        await db.prepare(stmt).run();
+      } catch {}
+    }
 
     // Inicializar contactos desde pendientes y pagos si la tabla está vacía
     const countContactos = await db
@@ -1517,18 +1548,29 @@ export async function getContactoByName(
   db: D1Database,
   contacto: string
 ): Promise<ContactoRecord | null> {
+  const cleanName = (contacto || '').trim();
+  if (!cleanName) return null;
+
   if (isLocalDevEnvironment()) {
     const res = await remoteApiFetch<ContactoRecord>(
-      `/api/contactos?check=${encodeURIComponent(contacto.trim())}`
+      `/api/contactos?check=${encodeURIComponent(cleanName)}`
     );
     return res.data ?? null;
   }
   await ensureDatabaseInitialized(db);
   const result = await db
-    .prepare('SELECT * FROM contactos WHERE LOWER(contacto) = LOWER(?) LIMIT 1')
-    .bind(contacto.trim())
+    .prepare('SELECT * FROM contactos WHERE LOWER(TRIM(contacto)) = LOWER(TRIM(?)) LIMIT 1')
+    .bind(cleanName)
     .first<ContactoRecord>();
-  return result ?? null;
+  if (result) return result;
+
+  // Fallback Unicode case-insensitive search (ej. tildes o Ñ que LOWER() de SQLite no convierte)
+  const all = await db.prepare('SELECT * FROM contactos').all<ContactoRecord>();
+  const targetLower = cleanName.toLowerCase();
+  const match = (all.results || []).find(
+    (c) => (c.contacto || '').trim().toLowerCase() === targetLower
+  );
+  return match ?? null;
 }
 
 export async function createContacto(
@@ -1547,37 +1589,90 @@ export async function createContacto(
   const contactoName = data.contacto ? data.contacto.trim() : '';
   if (!contactoName) return null;
 
+  const cleanField = (val: string | undefined, fallback = '-') => {
+    const trimmed = val ? val.trim() : '';
+    return trimmed || fallback;
+  };
+
   const existing = await getContactoByName(db, contactoName);
   if (existing) {
-    return existing;
+    const mergedFields: Partial<NewContactoRecord> = {
+      contacto: existing.contacto,
+      telefono: cleanField(data.telefono) !== '-' ? cleanField(data.telefono) : existing.telefono,
+      email: cleanField(data.email) !== '-' ? cleanField(data.email) : existing.email,
+      nombres: cleanField(data.nombres) !== '-' ? cleanField(data.nombres) : existing.nombres,
+      apellidos: cleanField(data.apellidos) !== '-' ? cleanField(data.apellidos) : existing.apellidos,
+      fecha_nacimiento:
+        cleanField(data.fecha_nacimiento) !== '-'
+          ? cleanField(data.fecha_nacimiento)
+          : existing.fecha_nacimiento,
+      numero_pasaporte:
+        cleanField(data.numero_pasaporte) !== '-'
+          ? cleanField(data.numero_pasaporte)
+          : existing.numero_pasaporte,
+      nacionalidad_pasaporte:
+        cleanField(data.nacionalidad_pasaporte) !== '-'
+          ? cleanField(data.nacionalidad_pasaporte)
+          : existing.nacionalidad_pasaporte,
+      genero: cleanField(data.genero) !== '-' ? cleanField(data.genero) : existing.genero,
+      fecha_emision_pasaporte:
+        cleanField(data.fecha_emision_pasaporte) !== '-'
+          ? cleanField(data.fecha_emision_pasaporte)
+          : existing.fecha_emision_pasaporte,
+      fecha_vencimiento_pasaporte:
+        cleanField(data.fecha_vencimiento_pasaporte) !== '-'
+          ? cleanField(data.fecha_vencimiento_pasaporte)
+          : existing.fecha_vencimiento_pasaporte,
+    };
+    const updated = await updateContacto(db, existing.id, mergedFields);
+    return updated ?? existing;
   }
 
-  const result = await db
-    .prepare(
-      `INSERT INTO contactos (
-        contacto, telefono, email, nombres, apellidos,
-        fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
-        genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      RETURNING *`
-    )
-    .bind(
-      contactoName,
-      data.telefono?.trim() || '-',
-      data.email?.trim() || '-',
-      data.nombres?.trim() || '-',
-      data.apellidos?.trim() || '-',
-      data.fecha_nacimiento?.trim() || '-',
-      data.numero_pasaporte?.trim() || '-',
-      data.nacionalidad_pasaporte?.trim() || '-',
-      data.genero?.trim() || '-',
-      data.fecha_emision_pasaporte?.trim() || '-',
-      data.fecha_vencimiento_pasaporte?.trim() || '-'
-    )
-    .first<ContactoRecord>();
+  const values = [
+    contactoName,
+    cleanField(data.telefono),
+    cleanField(data.email),
+    cleanField(data.nombres),
+    cleanField(data.apellidos),
+    cleanField(data.fecha_nacimiento),
+    cleanField(data.numero_pasaporte),
+    cleanField(data.nacionalidad_pasaporte),
+    cleanField(data.genero),
+    cleanField(data.fecha_emision_pasaporte),
+    cleanField(data.fecha_vencimiento_pasaporte),
+  ];
 
-  return result ?? null;
+  try {
+    const result = await db
+      .prepare(
+        `INSERT INTO contactos (
+          contacto, telefono, email, nombres, apellidos,
+          fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
+          genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        RETURNING *`
+      )
+      .bind(...values)
+      .first<ContactoRecord>();
+
+    if (result) return result;
+  } catch {
+    // Fallback si RETURNING * o restricción UNIQUE falla
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO contactos (
+          contacto, telefono, email, nombres, apellidos,
+          fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
+          genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(...values)
+      .run();
+  }
+
+  return await getContactoByName(db, contactoName);
 }
 
 export async function updateContacto(

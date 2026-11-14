@@ -419,11 +419,11 @@ const statusCounts = activeStatuses.reduce(
   id="modal-cliente"
   aria-labelledby="modal-title"
   {...({ closedby: 'any' } as any)}
-  class="m-auto w-full max-w-2xl rounded-2xl border-2 border-primary bg-base p-0 text-primary shadow-2xl backdrop:bg-primary-dark/60"
+  class="m-auto w-[94vw] max-w-2xl rounded-2xl border-2 border-primary bg-base p-0 text-primary shadow-2xl backdrop:bg-primary-dark/60 overflow-hidden"
 >
-  <form id="form-cliente" class="flex flex-col">
+  <form id="form-cliente" class="flex flex-col overflow-hidden">
     <!-- Cabecera del Modal -->
-    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base border-b-4 border-secondary">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-3.5 text-base border-b-4 border-secondary">
       <div>
         <h3 id="modal-title" class="text-base sm:text-lg font-extrabold">
           Cliente
@@ -441,8 +441,8 @@ const statusCounts = activeStatuses.reduce(
       </button>
     </div>
 
-    <!-- Cuerpo del Formulario -->
-    <div class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+    <!-- Cuerpo del Formulario (único contenedor con scroll) -->
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
       <input type="hidden" id="field-id" name="id" value="" />
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -667,7 +667,7 @@ const statusCounts = activeStatuses.reduce(
     </div>
 
     <!-- Pie del Modal con Botones para Eliminar y Guardar Cambios -->
-    <div class="flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <div>
         <button
           type="button"
@@ -702,18 +702,18 @@ const statusCounts = activeStatuses.reduce(
 <!-- Modal Rápido para Crear / Completar Contacto cuando no existe en la lista -->
 <dialog
   id="modal-quick-contacto"
-  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-lg w-[92vw] border-2 border-primary overflow-hidden"
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-2xl w-[94vw] border-2 border-primary overflow-hidden"
   aria-labelledby="modal-quick-contacto-title"
 >
-  <form id="form-quick-contacto" class="flex flex-col">
-    <div class="flex items-center justify-between bg-primary px-6 py-4 text-base">
+  <form id="form-quick-contacto" class="flex flex-col overflow-hidden">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-4 text-base">
       <div>
-        <h3 id="modal-quick-contacto-title" class="text-base sm:text-lg font-extrabold flex items-center gap-2">
+        <h3 id="modal-quick-contacto-title" class="text-lg font-extrabold flex items-center gap-2">
           <span>👤</span>
-          <span>Nuevo Cliente Detectado</span>
+          <span>Nuevo Contacto (Ficha Completa)</span>
         </h3>
-        <p class="text-xs text-base-muted/90 mt-0.5">
-          Este cliente no existe en Contactos. Completa su ficha para registrarlo.
+        <p class="text-xs text-base-muted/85 mt-0.5">
+          Este cliente no existe en Contactos. Completa sus datos personales, teléfono, correo y pasaporte.
         </p>
       </div>
       <button
@@ -721,25 +721,28 @@ const statusCounts = activeStatuses.reduce(
         id="btn-close-modal-quick-contacto"
         class="rounded-lg bg-base/10 hover:bg-base/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
       >
-        ✕
+        Cerrar ✕
       </button>
     </div>
 
-    <div class="p-6 space-y-3.5 text-sm max-h-[70vh] overflow-y-auto">
+    <div class="flex-auto min-h-0 p-6 space-y-4 text-sm overflow-y-auto overscroll-contain">
+      <!-- Identificador / Nombre Principal -->
       <div>
         <label for="quick-f-contacto" class="block text-xs font-bold uppercase text-primary mb-1">
-          Cliente / Nombre en el Pendiente *
+          Cliente / Contacto (Nombre para Pendientes y Pagos) *
         </label>
         <input
           type="text"
           id="quick-f-contacto"
           name="contacto"
           required
+          placeholder="Ej. Jaime Goenaga Pax"
           class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none"
         />
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Teléfono -->
         <div>
           <label for="quick-f-telefono" class="block text-xs font-bold uppercase text-primary mb-1">
             Teléfono
@@ -749,23 +752,26 @@ const statusCounts = activeStatuses.reduce(
             id="quick-f-telefono"
             name="telefono"
             placeholder="+599 9 520 1234"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary font-mono focus:border-primary focus:bg-base focus:outline-none"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary font-mono focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Email -->
         <div>
           <label for="quick-f-email" class="block text-xs font-bold uppercase text-primary mb-1">
             Email
           </label>
           <input
-            type="email"
+            type="text"
+            inputmode="email"
             id="quick-f-email"
             name="email"
             placeholder="cliente@ejemplo.com"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Nombres -->
         <div>
           <label for="quick-f-nombres" class="block text-xs font-bold uppercase text-primary mb-1">
             Nombres
@@ -774,11 +780,12 @@ const statusCounts = activeStatuses.reduce(
             type="text"
             id="quick-f-nombres"
             name="nombres"
-            placeholder="Nombres"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+            placeholder="Ej. Jaime Alberto"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Apellidos -->
         <div>
           <label for="quick-f-apellidos" class="block text-xs font-bold uppercase text-primary mb-1">
             Apellidos
@@ -787,24 +794,26 @@ const statusCounts = activeStatuses.reduce(
             type="text"
             id="quick-f-apellidos"
             name="apellidos"
-            placeholder="Apellidos"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+            placeholder="Ej. Goenaga Pax"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Fecha Nacimiento -->
         <div>
           <label for="quick-f-nacimiento" class="block text-xs font-bold uppercase text-primary mb-1">
-            Fecha Nacimiento
+            Fecha de Nacimiento
           </label>
           <input
             type="text"
             id="quick-f-nacimiento"
             name="fecha_nacimiento"
             placeholder="DD/MM/AAAA"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Género -->
         <div>
           <label for="quick-f-genero" class="block text-xs font-bold uppercase text-primary mb-1">
             Género
@@ -812,7 +821,7 @@ const statusCounts = activeStatuses.reduce(
           <select
             id="quick-f-genero"
             name="genero"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary font-medium focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-semibold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
           >
             <option value="-">-</option>
             <option value="Masculino">Masculino</option>
@@ -821,6 +830,7 @@ const statusCounts = activeStatuses.reduce(
           </select>
         </div>
 
+        <!-- Pasaporte: Número -->
         <div>
           <label for="quick-f-pasaporte" class="block text-xs font-bold uppercase text-primary mb-1">
             Número de Pasaporte
@@ -829,27 +839,56 @@ const statusCounts = activeStatuses.reduce(
             type="text"
             id="quick-f-pasaporte"
             name="numero_pasaporte"
-            placeholder="Ej. PA123456"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 font-mono font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
+            placeholder="Ej. PA12345678"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-mono font-bold text-secondary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
 
+        <!-- Pasaporte: Nacionalidad -->
         <div>
           <label for="quick-f-nacionalidad" class="block text-xs font-bold uppercase text-primary mb-1">
-            Nacionalidad Pasaporte
+            Nacionalidad del Pasaporte
           </label>
           <input
             type="text"
             id="quick-f-nacionalidad"
             name="nacionalidad_pasaporte"
-            placeholder="Nacionalidad"
-            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-1.5 text-primary focus:border-primary focus:bg-base focus:outline-none"
+            placeholder="Ej. Venezolana, Holandesa, Colombiana..."
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Pasaporte: Fecha Emisión -->
+        <div>
+          <label for="quick-f-emision" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha Emisión Pasaporte
+          </label>
+          <input
+            type="text"
+            id="quick-f-emision"
+            name="fecha_emision_pasaporte"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
+          />
+        </div>
+
+        <!-- Pasaporte: Fecha Vencimiento -->
+        <div>
+          <label for="quick-f-vencimiento" class="block text-xs font-bold uppercase text-primary mb-1">
+            Fecha Vencimiento Pasaporte
+          </label>
+          <input
+            type="text"
+            id="quick-f-vencimiento"
+            name="fecha_vencimiento_pasaporte"
+            placeholder="DD/MM/AAAA"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 text-primary focus:border-primary focus:bg-base focus:outline-none"
           />
         </div>
       </div>
     </div>
 
-    <div class="flex items-center justify-between gap-3 bg-base-muted px-6 py-4 border-t border-base-border">
+    <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-base-muted px-6 py-3.5 border-t border-base-border">
       <button
         type="button"
         id="btn-skip-quick-contacto"
@@ -857,18 +896,18 @@ const statusCounts = activeStatuses.reduce(
       >
         Omitir y guardar solo pendiente
       </button>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 ml-auto">
         <button
           type="button"
           id="btn-cancel-quick-contacto"
-          class="rounded-lg border border-base-border bg-base px-3.5 py-1.5 text-xs font-semibold text-primary hover:bg-base-muted cursor-pointer"
+          class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-semibold text-primary hover:bg-base-muted cursor-pointer"
         >
           Cancelar
         </button>
         <button
           type="submit"
           id="btn-submit-quick-contacto"
-          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-1.5 text-xs shadow-xs transition cursor-pointer"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 text-xs shadow-xs transition cursor-pointer"
         >
           Guardar Contacto y Pendiente
         </button>
@@ -997,6 +1036,8 @@ const statusCounts = activeStatuses.reduce(
   const quickFGenero = document.querySelector<HTMLSelectElement>('#quick-f-genero');
   const quickFPasaporte = document.querySelector<HTMLInputElement>('#quick-f-pasaporte');
   const quickFNacionalidad = document.querySelector<HTMLInputElement>('#quick-f-nacionalidad');
+  const quickFEmision = document.querySelector<HTMLInputElement>('#quick-f-emision');
+  const quickFVencimiento = document.querySelector<HTMLInputElement>('#quick-f-vencimiento');
 
   const cSolicitud = document.querySelector<HTMLElement>('#container-solicitud');
   const cMonto = document.querySelector<HTMLElement>('#container-monto');
@@ -1708,16 +1749,16 @@ const statusCounts = activeStatuses.reduce(
   btnCancelModal?.addEventListener('click', () => modal?.close());
 
   if (modal && !('closedBy' in HTMLDialogElement.prototype)) {
-    modal.addEventListener('click', (event) => {
-      if (event.target !== modal) return;
-      const rect = modal.getBoundingClientRect();
-      const isDialogContent =
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width;
-      if (isDialogContent) return;
-      modal.close();
+    const outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    modal.addEventListener('pointerdown', (e) => {
+      pressedOutside = outside(e, modal);
+    });
+    modal.addEventListener('pointerup', (e) => {
+      if (pressedOutside && outside(e, modal)) modal.close();
     });
   }
 
@@ -1762,6 +1803,7 @@ const statusCounts = activeStatuses.reduce(
     if (quickFContacto) quickFContacto.value = contacto;
     const parsed = parseContactoInitial(contacto);
     if (quickFTelefono) quickFTelefono.value = parsed.telefono !== '-' ? parsed.telefono : '';
+    if (quickFEmail) quickFEmail.value = '';
     if (quickFNombres) quickFNombres.value = parsed.nombres !== '-' ? parsed.nombres : '';
     if (quickFApellidos) {
       quickFApellidos.value =
@@ -1769,16 +1811,24 @@ const statusCounts = activeStatuses.reduce(
           ? apellidosDefault
           : (parsed.apellidos !== '-' ? parsed.apellidos : '');
     }
+    if (quickFNacimiento) quickFNacimiento.value = '';
+    if (quickFGenero) quickFGenero.value = '-';
+    if (quickFPasaporte) quickFPasaporte.value = '';
+    if (quickFNacionalidad) quickFNacionalidad.value = '';
+    if (quickFEmision) quickFEmision.value = '';
+    if (quickFVencimiento) quickFVencimiento.value = '';
 
+    // Cerrar el modal de pendiente primero para evitar conflicto de dos <dialog> modales simultáneos
+    modal?.close();
     modalQuickContacto.showModal();
-    quickFNombres?.focus();
+    quickFTelefono?.focus();
   }
 
   async function executeSavePendiente(payload: any) {
-    if (!btnSubmitModal) return;
-    btnSubmitModal.disabled = true;
-    const originalText = btnSubmitModal.textContent;
-    btnSubmitModal.textContent = 'Guardando...';
+    if (btnSubmitModal) {
+      btnSubmitModal.disabled = true;
+      btnSubmitModal.textContent = 'Guardando...';
+    }
 
     try {
       const method = payload.id ? 'PATCH' : 'POST';
@@ -1788,7 +1838,7 @@ const statusCounts = activeStatuses.reduce(
         body: JSON.stringify(payload),
       });
 
-      const result = (await response.json()) as { ok?: boolean; data?: ClienteRecord };
+      const result = (await response.json()) as { ok?: boolean; data?: ClienteRecord; error?: string };
 
       if (response.ok && result.ok && result.data) {
         const updated = result.data;
@@ -1877,11 +1927,15 @@ const statusCounts = activeStatuses.reduce(
         applyFilters();
         modal?.close();
         showSyncToast(`Cambios guardados en D1 (#${updated.id})`);
+      } else {
+        alert(result.error || 'Error al guardar el pendiente en D1.');
       }
+    } catch {
+      alert('Error de conexión al guardar el pendiente.');
     } finally {
       if (btnSubmitModal) {
         btnSubmitModal.disabled = false;
-        btnSubmitModal.textContent = originalText;
+        btnSubmitModal.textContent = payload.id ? 'Guardar Cambios' : 'Crear Pendiente';
       }
     }
   }
@@ -1894,6 +1948,7 @@ const statusCounts = activeStatuses.reduce(
     const contactoName = quickFContacto?.value?.trim() || pendingSavePayload?.contacto || '';
     if (!contactoName) {
       alert('El nombre del cliente/contacto es obligatorio.');
+      quickFContacto?.focus();
       return;
     }
 
@@ -1907,8 +1962,8 @@ const statusCounts = activeStatuses.reduce(
       genero: quickFGenero?.value || '-',
       numero_pasaporte: quickFPasaporte?.value?.trim() || '-',
       nacionalidad_pasaporte: quickFNacionalidad?.value?.trim() || '-',
-      fecha_emision_pasaporte: '-',
-      fecha_vencimiento_pasaporte: '-',
+      fecha_emision_pasaporte: quickFEmision?.value?.trim() || '-',
+      fecha_vencimiento_pasaporte: quickFVencimiento?.value?.trim() || '-',
     };
 
     btnSubmitQuickContacto.disabled = true;
@@ -1921,13 +1976,53 @@ const statusCounts = activeStatuses.reduce(
         body: JSON.stringify(newContactData),
       });
 
-      if (res.ok) {
-        const json = (await res.json()) as { ok?: boolean; data?: ContactoRecord };
-        if (json.data) {
-          contactosList.push(json.data);
+      const json = (await res.json()) as { ok?: boolean; data?: ContactoRecord; error?: string };
+
+      if (!res.ok || !json.ok || !json.data) {
+        alert(json.error || 'Error al guardar el contacto en D1.');
+        btnSubmitQuickContacto.disabled = false;
+        btnSubmitQuickContacto.textContent = 'Guardar Contacto y Pendiente';
+        return;
+      }
+
+      const savedContact = json.data;
+      const existingIdx = contactosList.findIndex(
+        (c) =>
+          c.id === savedContact.id ||
+          c.contacto.trim().toLowerCase() === savedContact.contacto.trim().toLowerCase()
+      );
+      if (existingIdx >= 0) {
+        contactosList[existingIdx] = savedContact;
+      } else {
+        contactosList.push(savedContact);
+      }
+
+      if (pendingSavePayload) {
+        pendingSavePayload.contacto = savedContact.contacto || contactoName;
+        if (
+          newContactData.apellidos !== '-' &&
+          (!pendingSavePayload.apellidos || pendingSavePayload.apellidos === '-')
+        ) {
+          pendingSavePayload.apellidos = newContactData.apellidos;
+          const codeParts: string[] = [];
+          if (pendingSavePayload.aerolinea && pendingSavePayload.aerolinea !== '-') {
+            codeParts.push(pendingSavePayload.aerolinea);
+          }
+          if (pendingSavePayload.localizador && pendingSavePayload.localizador !== '-') {
+            codeParts.push(pendingSavePayload.localizador);
+          }
+          const baseCode = codeParts.join(' | ');
+          pendingSavePayload.codigo = baseCode
+            ? `${baseCode} / ${newContactData.apellidos}`
+            : newContactData.apellidos;
         }
       }
-    } catch {}
+    } catch {
+      alert('Error de conexión al guardar el contacto.');
+      btnSubmitQuickContacto.disabled = false;
+      btnSubmitQuickContacto.textContent = 'Guardar Contacto y Pendiente';
+      return;
+    }
 
     btnSubmitQuickContacto.disabled = false;
     btnSubmitQuickContacto.textContent = 'Guardar Contacto y Pendiente';
@@ -1951,12 +2046,16 @@ const statusCounts = activeStatuses.reduce(
 
   btnCancelQuickContacto?.addEventListener('click', () => {
     modalQuickContacto?.close();
-    pendingSavePayload = null;
+    if (pendingSavePayload) {
+      modal?.showModal();
+    }
   });
 
   btnCloseModalQuickContacto?.addEventListener('click', () => {
     modalQuickContacto?.close();
-    pendingSavePayload = null;
+    if (pendingSavePayload) {
+      modal?.showModal();
+    }
   });
 
   // Guardar Cambios o Crear Cliente en Cloudflare D1
