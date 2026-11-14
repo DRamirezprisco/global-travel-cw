@@ -63,93 +63,94 @@ const statusCounts = activeStatuses.reduce(
   data-initial-hoy={initialHoyMode ? 'true' : 'false'}
   class="flex-1 min-h-0 flex flex-col w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3"
 >
-  <!-- Barra principal limpia: Buscador largo a la izquierda + Excel, PDF, Nuevo Pendiente y Menú Hamburguesa a la derecha -->
-  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-3.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-    <!-- Lado izquierdo: Buscador amplio + Contador -->
-    <div class="flex flex-1 flex-col sm:flex-row sm:items-center gap-3 min-w-0">
-      <div class="relative w-full flex-1 min-w-0 max-w-2xl">
-        <input
-          type="search"
-          id="input-search-clientes"
-          placeholder="Buscar por nombre, vuelo, aerolínea, localizador o teléfono..."
-          class="w-full rounded-lg border border-base-border bg-base-muted px-4 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
-        />
-      </div>
+  <!-- Barra principal limpia: Buscador ocupando la línea completa + Botones y contador debajo en una sola fila compacta -->
+  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-2.5 sm:p-3.5 shadow-xs flex flex-col gap-2 sm:gap-2.5">
+    <!-- Fila 1: Buscador ocupando la línea completa -->
+    <div class="w-full">
+      <input
+        type="search"
+        id="input-search-clientes"
+        placeholder="Buscar por nombre, vuelo, aerolínea, localizador o teléfono..."
+        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+      />
+    </div>
 
-      <div class="flex items-center gap-2.5 text-xs sm:text-sm font-semibold text-primary whitespace-nowrap shrink-0">
+    <!-- Fila 2 debajo del buscador: Contador a la izquierda + Botones compactos a la derecha en una sola fila -->
+    <div class="flex items-center justify-between gap-1.5 sm:gap-3 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
+      <div class="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-primary whitespace-nowrap shrink-0">
         <span id="visible-rows-counter">
           Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
         </span>
         <span
           id="d1-sync-toast"
-          class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-2.5 py-1 text-xs font-bold"
+          class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-1.5 py-0.5 text-[10px] font-bold"
         >
           Guardado en D1
         </span>
       </div>
-    </div>
 
-    <!-- Lado derecho: Excel, PDF, Nuevo Pendiente y Botón Hamburguesa (Filtros + Pendientes de Hoy) -->
-    <div class="flex flex-wrap items-center gap-2 shrink-0">
-      <button
-        type="button"
-        id="btn-delete-selected-pendientes"
-        title="Eliminar los pendientes marcados (los contactos se mantienen intactos)"
-        class="hidden rounded-lg bg-secondary/10 border border-secondary text-secondary hover:bg-secondary hover:text-base font-extrabold px-3.5 py-2 text-xs shadow-xs transition items-center gap-1.5 cursor-pointer"
-      >
-        <span>🗑️</span>
-        <span id="label-delete-selected">Eliminar Seleccionados (0)</span>
-      </button>
-
-      <button
-        type="button"
-        data-export-excel="true"
-        title="Descargar Reporte Operativo en Excel (.xlsx)"
-        class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-      >
-        <span>📊</span>
-        <span data-export-excel-label>Excel</span>
-      </button>
-
-      <button
-        type="button"
-        data-export-pdf="pendientes"
-        title="Descargar Reporte de Pendientes en PDF (.pdf)"
-        class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-      >
-        <span>📄</span>
-        <span data-export-pdf-label>PDF</span>
-      </button>
-
-      <button
-        type="button"
-        id="btn-open-new-modal"
-        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-      >
-        <span>+</span>
-        <span>Nuevo Pendiente</span>
-      </button>
-
-      <!-- Contenedor relativo para el Botón Hamburguesa de ESTATUS y su lista desplegable -->
-      <div class="relative">
+      <!-- Botones compactos en una sola fila -->
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap">
         <button
           type="button"
-          id="btn-toggle-status-menu"
-          aria-expanded="false"
-          title="Abrir menú de Estatus y Pendientes de Hoy"
-          class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+          id="btn-delete-selected-pendientes"
+          title="Eliminar los pendientes marcados (los contactos se mantienen intactos)"
+          class="hidden rounded-lg bg-secondary/10 border border-secondary text-secondary hover:bg-secondary hover:text-base font-extrabold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition items-center gap-1 cursor-pointer"
         >
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          <span>Estatus</span>
-          <span
-            id="badge-status-active"
-            class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
-          >
-            0
-          </span>
+          <span>🗑️</span>
+          <span id="label-delete-selected">Eliminar Seleccionados (0)</span>
         </button>
+
+        <button
+          type="button"
+          data-export-excel="true"
+          title="Descargar Reporte Operativo en Excel (.xlsx)"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-60"
+        >
+          <span>📊</span>
+          <span data-export-excel-label>Excel</span>
+        </button>
+
+        <button
+          type="button"
+          data-export-pdf="pendientes"
+          title="Descargar Reporte de Pendientes en PDF (.pdf)"
+          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-60"
+        >
+          <span>📄</span>
+          <span data-export-pdf-label>PDF</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-open-new-modal"
+          class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-2.5 py-1 sm:px-3.5 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
+        >
+          <span>+</span>
+          <span class="hidden sm:inline">Nuevo Pendiente</span>
+          <span class="sm:hidden">Nuevo</span>
+        </button>
+
+        <!-- Contenedor relativo para el Botón Hamburguesa de ESTATUS y su lista desplegable -->
+        <div class="relative">
+          <button
+            type="button"
+            id="btn-toggle-status-menu"
+            aria-expanded="false"
+            title="Abrir menú de Estatus y Pendientes de Hoy"
+            class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span>Estatus</span>
+            <span
+              id="badge-status-active"
+              class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[9px] sm:text-[10px] font-extrabold leading-none"
+            >
+              0
+            </span>
+          </button>
 
         <!-- Menú Hamburguesa de Estatus desplegable: Estatus + Pendientes de Hoy -->
         <div
@@ -247,15 +248,15 @@ const statusCounts = activeStatuses.reduce(
           id="btn-toggle-hamburger-menu"
           aria-expanded="false"
           title="Abrir menú de Filtros (Fecha Vuelo, Fecha Emisión, Aerolínea, Localizador)"
-          class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+          class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer"
         >
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
           <span>Filtros</span>
           <span
             id="badge-hamburger-active"
-            class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+            class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[9px] sm:text-[10px] font-extrabold leading-none"
           >
             0
           </span>
@@ -421,6 +422,7 @@ const statusCounts = activeStatuses.reduce(
       </div>
     </div>
   </div>
+</div>
 
   <!-- Tabla Grid Maestra Unificada (6 Columnas Fijas, Clic en Fila abre Ventana Completa) -->
   <div class="flex-1 min-h-0 flex flex-col bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">

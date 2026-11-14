@@ -22,44 +22,47 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
 
 <section id="pagos-panel-container" data-contactos={JSON.stringify(contactosList)} class="flex-1 min-h-0 flex flex-col w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3">
   <!-- Barra de búsqueda por nombre, contador, exportación y hamburguesa de filtros -->
-  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="relative flex-1 max-w-md">
+  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-2.5 sm:p-3.5 shadow-xs flex flex-col gap-2 sm:gap-2.5">
+    <div class="w-full">
       <input
         type="search"
         id="input-search-pagos"
         placeholder="Buscar por nombre..."
-        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
       />
     </div>
 
-    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
-      <span id="visible-rows-counter">
-        Mostrando <strong>{pagos.length}</strong> de <strong>{pagos.length}</strong>
-      </span>
-      <span
-        id="d1-sync-toast"
-        class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition"
-      >
-        Guardado en D1
-      </span>
-      <div class="flex flex-wrap items-center gap-2 ml-auto sm:ml-0">
+    <div class="flex items-center justify-between gap-1.5 sm:gap-3 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
+      <div class="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-primary whitespace-nowrap shrink-0">
+        <span id="visible-rows-counter">
+          Mostrando <strong>{pagos.length}</strong> de <strong>{pagos.length}</strong>
+        </span>
+        <span
+          id="d1-sync-toast"
+          class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 text-[10px] font-bold transition"
+        >
+          Guardado en D1
+        </span>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap">
         <button
           type="button"
           data-export-excel="true"
           title="Descargar Reporte Operativo en Excel (.xlsx)"
-          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-60"
         >
           <span>📊</span>
-          <span data-export-excel-label>Descargar Excel</span>
+          <span data-export-excel-label>Excel</span>
         </button>
         <button
           type="button"
           data-export-pdf="cobranzas"
           title="Descargar Reporte de Cobranzas y Pagos en PDF (.pdf)"
-          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-60"
         >
           <span>📄</span>
-          <span data-export-pdf-label>Descargar PDF</span>
+          <span data-export-pdf-label>PDF</span>
         </button>
 
         <!-- Botón Hamburguesa de Filtros de Pagos -->
@@ -69,15 +72,15 @@ const statusCounts = PAGO_STATUS_LIST.reduce(
             id="btn-toggle-filtros-pagos"
             aria-expanded="false"
             title="Abrir filtros de estatus de pagos"
-            class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+            class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-2 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs shadow-xs transition flex items-center gap-1 cursor-pointer"
           >
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
             <span>Filtros</span>
             <span
               id="badge-filtros-pagos"
-              class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+              class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[9px] sm:text-[10px] font-extrabold leading-none"
             >
               0
             </span>

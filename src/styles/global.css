@@ -226,3 +226,12 @@ dialog:modal > form {
     display: none !important;
   }
 }
+
+/* Utilidad para navegación y barras horizontales deslizables sin mostrar scrollbar en móvil */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
