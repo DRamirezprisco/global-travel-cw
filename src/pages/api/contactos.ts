@@ -70,6 +70,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       numero_pasaporte: body.numero_pasaporte ?? '-',
       nacionalidad_pasaporte: body.nacionalidad_pasaporte ?? '-',
       genero: body.genero ?? '-',
+      tipo_cliente: body.tipo_cliente ?? '-',
       fecha_emision_pasaporte: body.fecha_emision_pasaporte ?? '-',
       fecha_vencimiento_pasaporte: body.fecha_vencimiento_pasaporte ?? '-',
     });

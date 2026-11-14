@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import {
   getAllEstatus,
+  getAllNotas,
   getAllPagos,
   getAllPendientes,
   getDatabase,
@@ -14,10 +15,11 @@ const JSON_HEADERS = {
 export const GET: APIRoute = async ({ locals }) => {
   try {
     const db = getDatabase(locals);
-    const [pendientes, pagos, estatus] = await Promise.all([
+    const [pendientes, pagos, estatus, notas] = await Promise.all([
       getAllPendientes(db),
       getAllPagos(db),
       getAllEstatus(db),
+      getAllNotas(db),
     ]);
 
     return new Response(
@@ -27,6 +29,7 @@ export const GET: APIRoute = async ({ locals }) => {
           pendientes,
           pagos,
           estatus,
+          notas,
           generatedAt: new Date().toISOString(),
         },
       }),

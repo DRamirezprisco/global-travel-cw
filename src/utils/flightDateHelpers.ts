@@ -165,11 +165,11 @@ export function extractFlightDatesFromText(
     index: number;
   }> = [];
 
-  // 1. Patrón: DD-DDMMM o DDMMM (incluso pegado a código de aeropuerto como 22NOV, 29NOVCURMAR, 27DEC, 24-25DEC, 21 OCT)
+  // 1. Patrón: DD-DDMMM o DDMMM (incluso pegado a código de aeropuerto como 22NOV, 29NOVCURMAR, 14DECCURMAR | 04JANMARCUR, 27DEC, 24-25DEC, 21 OCT)
   const monthNamesPattern =
-    '(JAN|ENE|ENERO|FEB|FEBRERO|MARZO|MAR|APR|ABR|ABRIL|MAY|MAYO|JUN|JUNIO|JUL|JULIO|AUG|AGO|AGOSTO|SEPTIEMBRE|SEPT|SEP|SET|OCTUBRE|OCT|OTC|NOVIEMBRE|NOV|DICIEMBRE|DEC|DIC)';
+    '(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SEPT|OCTUBRE|NOVIEMBRE|DICIEMBRE|JAN|ENE|FEB|MAR|APR|ABR|MAY|JUN|JUL|AUG|AGO|SEP|SET|OCT|OTC|NOV|DEC|DIC)';
   const regexDayMonth = new RegExp(
-    `(?:^|[^A-Z0-9])(\\d{1,2})(?:\\s*\\-\\s*(\\d{1,2}))?\\s*${monthNamesPattern}(?:[A-Z]{0,8})(?:\\s*(\\d{2,4}))?`,
+    `(?:^|[^0-9])(\\d{1,2})(?:\\s*\\-\\s*(\\d{1,2}))?\\s*${monthNamesPattern}`,
     'g'
   );
 
@@ -179,19 +179,11 @@ export function extractFlightDatesFromText(
     const day2 = match[2] ? Number(match[2]) : null;
     const monthKey = match[3];
     const month = MONTH_MAP[monthKey];
-    const yearStr = match[4];
-    let explicitYear: number | undefined;
-    if (yearStr) {
-      const y = Number(yearStr);
-      if (y >= 24 && y <= 35) explicitYear = 2000 + y;
-      else if (y >= 2024 && y <= 2035) explicitYear = y;
-    }
 
     if (month && day1 >= 1 && day1 <= 31) {
       rawExtracted.push({
         day: day1,
         month,
-        explicitYear,
         rawToken: match[0].trim(),
         index: match.index,
       });
@@ -200,7 +192,6 @@ export function extractFlightDatesFromText(
       rawExtracted.push({
         day: day2,
         month,
-        explicitYear,
         rawToken: match[0].trim(),
         index: match.index + 1,
       });
@@ -226,17 +217,38 @@ export function extractFlightDatesFromText(
     }
   }
 
-  // 3. Patrón numérico: DD/MM/YYYY, DD/MM/YY o DD/MM (ej. "05/11", "14/11/26 - 28/11/26", "22/11/2026")
-  const regexNumeric = /(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?!\d)/g;
+  // 3. Patrón numérico: DD/MM/YYYY, DD/MM/YY, DD/MM o DD-MM-YYYY (ej. "05/11", "17/12/26", "23/12/2026")
+  const regexNumeric = /(?:^|[^\d\/\-])(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?(?!\d)/g;
   while ((match = regexNumeric.exec(text)) !== null) {
-    const day = Number(match[1]);
-    const month = Number(match[2]);
-    const yearStr = match[3];
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const thirdStr = match[3];
+    // Evitar confundir YYYY-MM-DD aquí (se procesa abajo)
+    if (match[1].length === 4) continue;
+    const day = first;
+    const month = second;
     let explicitYear: number | undefined;
-    if (yearStr) {
-      const y = Number(yearStr);
+    if (thirdStr) {
+      const y = Number(thirdStr);
       explicitYear = y < 100 ? 2000 + y : y;
     }
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      rawExtracted.push({
+        day,
+        month,
+        explicitYear,
+        rawToken: match[0].trim(),
+        index: match.index,
+      });
+    }
+  }
+
+  // 4. Patrón ISO: YYYY-MM-DD (ej. "2026-12-23")
+  const regexIso = /(\d{4})-(\d{2})-(\d{2})/g;
+  while ((match = regexIso.exec(text)) !== null) {
+    const explicitYear = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
       rawExtracted.push({
         day,

@@ -1,0 +1,17 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Header from '@/components/common/Header.astro';
+import NotasPanel from '@/components/notas/NotasPanel.astro';
+import { getAllNotas, getDatabase } from '@/utils/db';
+
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+const db = getDatabase(Astro.locals);
+const notas = await getAllNotas(db);
+---
+
+<Layout title="Global Travel CW | Notas y Check List">
+  <Header activeTab="notas" />
+  <main class="flex-1 min-h-0 flex flex-col overflow-hidden bg-base-muted">
+    <NotasPanel notas={notas} />
+  </main>
+</Layout>

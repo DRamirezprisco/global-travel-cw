@@ -61,193 +61,376 @@ const statusCounts = activeStatuses.reduce(
   id="hero-pendientes-container"
   data-contactos={JSON.stringify(contactosList)}
   data-initial-hoy={initialHoyMode ? 'true' : 'false'}
-  class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
+  class="flex-1 min-h-0 flex flex-col w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3"
 >
-  <!-- Tarjetas / Píldoras de los Estatus de Pendientes -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
-      {
-        activeStatuses.map((st) => {
-          const cfg = STATUS_CONFIGS[st.nombre as keyof typeof STATUS_CONFIGS];
-          const color = st.color || '#1e3a8a';
-          const count = statusCounts[st.nombre] ?? 0;
-          return (
-            <button
-              type="button"
-              data-status-pill={st.nombre}
-              title={`Filtrar por ${st.nombre}`}
-              class={`status-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition hover:shadow-sm cursor-pointer ${
-                cfg?.badgeClass || ''
-              }`}
-              style={`background-color: ${color}14; border-color: ${color}55; color: ${color};`}
-            >
-              <div class="flex items-center gap-2 min-w-0">
-                <span
-                  class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg?.dotClass || ''}`}
-                  style={`background-color: ${color}; ring-color: ${color}40;`}
-                />
-                <span class="text-xs font-bold truncate">{st.nombre}</span>
-              </div>
-              <span
-                data-status-count={st.nombre}
-                class="inline-flex items-center justify-center rounded-md bg-base/90 text-primary px-2 py-0.5 text-xs font-extrabold shrink-0 border border-base-border"
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })
-      }
-    </div>
-  </div>
-
-  <!-- Banner Informativo del Modo "Pendientes Hoy" -->
-  <div
-    id="banner-pendientes-hoy"
-    class={`rounded-xl border-2 border-amber-400 bg-amber-50/90 p-4 shadow-xs transition ${initialHoyMode ? '' : 'hidden'}`}
-  >
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-      <div class="space-y-1">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-3 py-1 text-xs font-extrabold text-white shadow-xs">
-            📅 PENDIENTES DE HOY Y +1 DÍA
-          </span>
-          <span id="hoy-range-summary" class="text-xs font-extrabold text-primary">
-            Cargando rango de fechas...
-          </span>
-        </div>
-        <p class="text-xs text-primary/80 leading-relaxed">
-          <strong>Vuelos / Multiruta (Datos del Vuelo):</strong> Filtra fecha actual y 1 día después (ej. <code class="bg-white/80 px-1 rounded">22NOV MARCUR</code> → <code class="bg-white/80 px-1 rounded">22/11/2026</code>; en multirutas como <code class="bg-white/80 px-1 rounded">27DEC CURMAR / 10JAN CURMAR</code> evalúa ambas fechas ordenando primero la más cercana y luego la más lejana).
-          <strong class="ml-1">Reserva por 24h:</strong> Filtra por <strong>Fecha de Gestión</strong> que vence hoy (de hoy y de ayer).
-        </p>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2 shrink-0">
-        <label for="input-hoy-ref-date" class="text-xs font-extrabold uppercase text-primary/80">
-          Fecha base:
-        </label>
-        <input
-          type="date"
-          id="input-hoy-ref-date"
-          class="rounded-lg border border-amber-400 bg-base px-2.5 py-1.5 text-xs font-bold text-primary focus:border-primary focus:outline-none cursor-pointer"
-        />
-        <button
-          type="button"
-          id="btn-reset-hoy-date"
-          title="Restablecer a la fecha actual de hoy"
-          class="rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 text-xs transition cursor-pointer"
-        >
-          Hoy
-        </button>
-        <button
-          type="button"
-          id="btn-exit-hoy-mode"
-          class="rounded-lg border border-primary/30 bg-base hover:bg-base-muted text-primary font-bold px-3 py-1.5 text-xs transition cursor-pointer"
-        >
-          Ver Todos los Pendientes ✕
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Barra de búsqueda por nombre, botón Pendientes de Hoy y contador de registros -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-2xl">
-      <div class="relative flex-1">
+  <!-- Barra principal limpia: Buscador largo a la izquierda + Excel, PDF, Nuevo Pendiente y Menú Hamburguesa a la derecha -->
+  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-3.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <!-- Lado izquierdo: Buscador amplio + Contador -->
+    <div class="flex flex-1 flex-col sm:flex-row sm:items-center gap-3 min-w-0">
+      <div class="relative w-full flex-1 min-w-0 max-w-2xl">
         <input
           type="search"
           id="input-search-clientes"
-          placeholder="Buscar por nombre..."
-          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+          placeholder="Buscar por nombre, vuelo, aerolínea, localizador o teléfono..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-4 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
         />
       </div>
 
-      <!-- Botón de Pendientes de Hoy dentro del menú Pendientes -->
-      <button
-        type="button"
-        id="btn-toggle-pendientes-hoy"
-        title="Ver pendientes de hoy y +1 día (por Datos del Vuelo) y Reservas 24h por vencer (hoy y ayer)"
-        class="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-900 font-extrabold px-3.5 py-2 text-xs shadow-xs transition cursor-pointer whitespace-nowrap"
-      >
-        <span>📅</span>
-        <span>Pendientes de Hoy</span>
-        <span
-          id="badge-count-pendientes-hoy"
-          class="inline-flex items-center justify-center rounded-full bg-amber-600 text-white px-2 py-0.5 text-[11px] font-extrabold"
-        >
-          0
+      <div class="flex items-center gap-2.5 text-xs sm:text-sm font-semibold text-primary whitespace-nowrap shrink-0">
+        <span id="visible-rows-counter">
+          Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
         </span>
-      </button>
+        <span
+          id="d1-sync-toast"
+          class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-2.5 py-1 text-xs font-bold"
+        >
+          Guardado en D1
+        </span>
+      </div>
     </div>
 
-    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
-      <span id="visible-rows-counter">
-        Mostrando <strong>{clientes.length}</strong> de <strong>{clientes.length}</strong>
-      </span>
-      <span
-        id="d1-sync-toast"
-        class="hidden rounded-md bg-status-emitida-bg text-status-emitida-text border border-status-emitida-border px-2.5 py-1 text-xs font-bold"
+    <!-- Lado derecho: Excel, PDF, Nuevo Pendiente y Botón Hamburguesa (Filtros + Pendientes de Hoy) -->
+    <div class="flex flex-wrap items-center gap-2 shrink-0">
+      <button
+        type="button"
+        id="btn-delete-selected-pendientes"
+        title="Eliminar los pendientes marcados (los contactos se mantienen intactos)"
+        class="hidden rounded-lg bg-secondary/10 border border-secondary text-secondary hover:bg-secondary hover:text-base font-extrabold px-3.5 py-2 text-xs shadow-xs transition items-center gap-1.5 cursor-pointer"
       >
-        Guardado en D1
-      </span>
-      <div class="flex flex-wrap items-center gap-2 ml-auto sm:ml-0">
+        <span>🗑️</span>
+        <span id="label-delete-selected">Eliminar Seleccionados (0)</span>
+      </button>
+
+      <button
+        type="button"
+        data-export-excel="true"
+        title="Descargar Reporte Operativo en Excel (.xlsx)"
+        class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+      >
+        <span>📊</span>
+        <span data-export-excel-label>Excel</span>
+      </button>
+
+      <button
+        type="button"
+        data-export-pdf="true"
+        title="Descargar Reporte Operativo en PDF (.pdf)"
+        class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+      >
+        <span>📄</span>
+        <span data-export-pdf-label>PDF</span>
+      </button>
+
+      <button
+        type="button"
+        id="btn-open-new-modal"
+        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+      >
+        <span>+</span>
+        <span>Nuevo Pendiente</span>
+      </button>
+
+      <!-- Contenedor relativo para el Botón Hamburguesa de ESTATUS y su lista desplegable -->
+      <div class="relative">
         <button
           type="button"
-          id="btn-delete-selected-pendientes"
-          title="Eliminar los pendientes marcados (los contactos se mantienen intactos)"
-          class="hidden rounded-lg bg-secondary/10 border border-secondary text-secondary hover:bg-secondary hover:text-base font-extrabold px-3.5 py-2 text-xs shadow-xs transition items-center gap-1.5 cursor-pointer"
+          id="btn-toggle-status-menu"
+          aria-expanded="false"
+          title="Abrir menú de Estatus y Pendientes de Hoy"
+          class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
         >
-          <span>🗑️</span>
-          <span id="label-delete-selected">Eliminar Seleccionados (0)</span>
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          <span>Estatus</span>
+          <span
+            id="badge-status-active"
+            class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+          >
+            0
+          </span>
         </button>
+
+        <!-- Menú Hamburguesa de Estatus desplegable: Estatus + Pendientes de Hoy -->
+        <div
+          id="panel-status-pendientes"
+          class="hidden absolute right-0 top-full mt-2 z-50 w-72 sm:w-80 max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain bg-base rounded-xl border-2 border-primary/25 p-3.5 shadow-xl transition-all"
+        >
+          <!-- Encabezado con botón Limpiar (azul claro) y botón ✕ -->
+          <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-base-border">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-primary">
+              🏷️ Filtrar por Estatus
+            </span>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="btn-clear-status-filters"
+                title="Limpiar filtro de estatus"
+                class="rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-2.5 py-1 text-xs transition cursor-pointer"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                id="btn-close-status-filters"
+                title="Cerrar menú de estatus"
+                aria-label="Cerrar menú de estatus"
+                class="rounded-lg border border-base-border bg-base-muted hover:bg-base text-primary/80 font-extrabold px-2.5 py-1 text-xs leading-none transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div class="grid grid-cols-1 gap-1.5 pb-2 border-b border-base-border">
+              {
+                activeStatuses.map((st) => {
+                  const cfg = STATUS_CONFIGS[st.nombre as keyof typeof STATUS_CONFIGS];
+                  const color = st.color || '#1e3a8a';
+                  const count = statusCounts[st.nombre] ?? 0;
+                  return (
+                    <button
+                      type="button"
+                      data-status-pill={st.nombre}
+                      title={`Filtrar por ${st.nombre}`}
+                      class={`status-filter-pill w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition hover:shadow-sm cursor-pointer ${
+                        cfg?.badgeClass || ''
+                      }`}
+                      style={`background-color: ${color}14; border-color: ${color}55; color: ${color};`}
+                    >
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span
+                          class={`h-2.5 w-2.5 shrink-0 rounded-full ${cfg?.dotClass || ''}`}
+                          style={`background-color: ${color}; ring-color: ${color}40;`}
+                        />
+                        <span class="text-xs font-bold truncate">{st.nombre}</span>
+                      </div>
+                      <span
+                        data-status-count={st.nombre}
+                        class="inline-flex items-center justify-center rounded-md bg-base/90 text-primary px-2 py-0.5 text-xs font-extrabold shrink-0 border border-base-border"
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })
+              }
+            </div>
+
+            <!-- Pendientes de Hoy -->
+            <button
+              type="button"
+              id="btn-toggle-pendientes-hoy"
+              title="Ver pendientes de hoy y +1 día (por Datos del Vuelo) y Reservas 24h por vencer (hoy y ayer)"
+              class="w-full inline-flex items-center justify-between gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-900 font-extrabold px-3 py-2 text-xs shadow-2xs transition cursor-pointer"
+            >
+              <span class="flex items-center gap-2">
+                <span>📅</span>
+                <span>Pendientes de Hoy</span>
+              </span>
+              <span
+                id="badge-count-pendientes-hoy"
+                class="inline-flex items-center justify-center rounded-full bg-amber-600 text-white px-2 py-0.5 text-[11px] font-extrabold"
+              >
+                0
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contenedor relativo para el Botón Hamburguesa de FILTROS y su lista desplegable -->
+      <div class="relative">
         <button
           type="button"
-          id="btn-delete-all-pendientes"
-          title="Eliminar pendientes actuales manteniendo el directorio de Contactos intacto"
-          class="rounded-lg border border-secondary/60 bg-base hover:bg-secondary hover:text-base text-secondary font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          id="btn-toggle-hamburger-menu"
+          aria-expanded="false"
+          title="Abrir menú de Filtros (Fecha Vuelo, Fecha Emisión, Aerolínea, Localizador)"
+          class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
         >
-          <span>🗑️</span>
-          <span id="label-delete-all">Eliminar Pendientes</span>
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          <span>Filtros</span>
+          <span
+            id="badge-hamburger-active"
+            class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+          >
+            0
+          </span>
         </button>
-        <button
-          type="button"
-          data-export-excel="true"
-          title="Descargar Reporte Operativo en Excel (.xlsx)"
-          class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+
+        <!-- Menú Hamburguesa desplegable en lista vertical: los 4 Filtros -->
+        <div
+          id="panel-filtros-pendientes"
+          class="hidden absolute right-0 top-full mt-2 z-50 w-80 sm:w-96 max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain bg-base rounded-xl border-2 border-primary/25 p-3.5 shadow-xl transition-all"
         >
-          <span>📊</span>
-          <span data-export-excel-label>Excel</span>
-        </button>
-        <button
-          type="button"
-          data-export-pdf="true"
-          title="Descargar Reporte Operativo en PDF (.pdf)"
-          class="rounded-lg bg-secondary hover:bg-secondary-light text-white font-bold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-        >
-          <span>📄</span>
-          <span data-export-pdf-label>PDF</span>
-        </button>
-        <button
-          type="button"
-          id="btn-open-new-modal"
-          class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>+</span>
-          <span>Nuevo Pendiente</span>
-        </button>
+          <!-- Encabezado con botón ✕ -->
+          <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-base-border">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-primary">
+              🔎 Filtros de Pendientes
+            </span>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="btn-close-quick-filters"
+                title="Cerrar menú de filtros"
+                aria-label="Cerrar menú de filtros"
+                class="rounded-lg border border-base-border bg-base-muted hover:bg-base text-primary/80 font-extrabold px-2.5 py-1 text-xs leading-none transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista vertical desglosada de los tipos de filtro -->
+          <div class="flex flex-col gap-2.5">
+            <!-- 1. Filtro por Fecha de Vuelo (DATOS DEL VUELO) -->
+            <div
+              id="box-filter-vuelo"
+              class="rounded-lg border border-base-border bg-base-muted/50 p-2.5 flex flex-col gap-1.5 transition"
+            >
+              <div class="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-filter-vuelo"
+                  data-quick-filter-btn="vuelo"
+                  class="text-[11px] font-extrabold uppercase tracking-wide text-primary flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>✈️ Fecha de Vuelo</span>
+                  <span id="dot-filter-vuelo" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
+                </button>
+                <span class="text-[10px] font-semibold text-primary/60">Datos del Vuelo</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <input
+                  type="search"
+                  id="filter-vuelo-text"
+                  placeholder="Ej: 22NOV, 22/11/26, MARCUR..."
+                  class="w-full rounded-lg border border-base-border bg-base px-2.5 py-1.5 text-xs font-semibold text-primary placeholder:text-primary/45 focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="date"
+                  id="filter-vuelo-date"
+                  title="Seleccionar fecha exacta de vuelo en calendario"
+                  class="w-[38px] shrink-0 rounded-lg border border-base-border bg-base px-1.5 py-1.5 text-xs font-semibold text-primary focus:border-primary focus:outline-none cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <!-- 2. Filtro por Fecha de Emisión (FECHA Gestión / Reserva / Factura) -->
+            <div
+              id="box-filter-emision"
+              class="rounded-lg border border-base-border bg-base-muted/50 p-2.5 flex flex-col gap-1.5 transition"
+            >
+              <div class="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-filter-emision"
+                  data-quick-filter-btn="emision"
+                  class="text-[11px] font-extrabold uppercase tracking-wide text-primary flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>📆 Fecha de Emisión</span>
+                  <span id="dot-filter-emision" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
+                </button>
+                <span class="text-[10px] font-semibold text-primary/60">Gestión / Reserva</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <input
+                  type="search"
+                  id="filter-emision-text"
+                  placeholder="Ej: 02/11/26, 29/10/26..."
+                  class="w-full rounded-lg border border-base-border bg-base px-2.5 py-1.5 text-xs font-semibold text-primary placeholder:text-primary/45 focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="date"
+                  id="filter-emision-date"
+                  title="Seleccionar fecha de emisión en calendario"
+                  class="w-[38px] shrink-0 rounded-lg border border-base-border bg-base px-1.5 py-1.5 text-xs font-semibold text-primary focus:border-primary focus:outline-none cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <!-- 3. Filtro por Aerolínea -->
+            <div
+              id="box-filter-aerolinea"
+              class="rounded-lg border border-base-border bg-base-muted/50 p-2.5 flex flex-col gap-1.5 transition"
+            >
+              <div class="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-filter-aerolinea"
+                  data-quick-filter-btn="aerolinea"
+                  class="text-[11px] font-extrabold uppercase tracking-wide text-primary flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🛫 Aerolínea</span>
+                  <span id="dot-filter-aerolinea" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
+                </button>
+                <span class="text-[10px] font-semibold text-primary/60">Campo Aerolínea</span>
+              </div>
+              <input
+                type="search"
+                id="filter-aerolinea-text"
+                list="datalist-filter-aerolineas"
+                placeholder="Ej: AVIOR, COPA, WINGO..."
+                class="w-full rounded-lg border border-base-border bg-base px-2.5 py-1.5 text-xs font-semibold text-primary placeholder:text-primary/45 focus:border-primary focus:outline-none"
+              />
+              <datalist id="datalist-filter-aerolineas"></datalist>
+            </div>
+
+            <!-- 4. Filtro por Código Localizador (PNR) -->
+            <div
+              id="box-filter-localizador"
+              class="rounded-lg border border-base-border bg-base-muted/50 p-2.5 flex flex-col gap-1.5 transition"
+            >
+              <div class="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-filter-localizador"
+                  data-quick-filter-btn="localizador"
+                  class="text-[11px] font-extrabold uppercase tracking-wide text-primary flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🎫 Localizador (PNR)</span>
+                  <span id="dot-filter-localizador" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
+                </button>
+                <span class="text-[10px] font-semibold text-primary/60">Código PNR</span>
+              </div>
+              <input
+                type="search"
+                id="filter-localizador-text"
+                autocomplete="off"
+                placeholder="Ej: AWTJMQ, GD5U99..."
+                class="w-full rounded-lg border border-base-border bg-base px-2.5 py-1.5 text-xs font-semibold text-primary placeholder:text-primary/45 focus:border-primary focus:outline-none uppercase"
+              />
+            </div>
+
+            <div class="pt-2 border-t border-base-border flex justify-end">
+              <button
+                type="button"
+                id="btn-clear-quick-filters"
+                title="Limpiar todos los filtros"
+                class="w-full justify-center rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-3 py-2 text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🧹</span>
+                <span>Limpiar Filtros</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Tabla Grid Maestra Unificada (6 Columnas Fijas, Clic en Fila abre Ventana Completa) -->
-  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+  <div class="flex-1 min-h-0 flex flex-col bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
     <div
       tabindex="0"
       role="region"
       aria-labelledby="clientes-table-caption"
       class="table-wrapper"
     >
-      <table class="clientes-table text-left text-sm">
+      <table class="clientes-table pendientes-table text-left text-sm">
         <caption id="clientes-table-caption" class="sr-only">
           Tabla unificada de pendientes de Global Travel CW almacenada en Cloudflare D1
         </caption>
@@ -830,6 +1013,24 @@ const statusCounts = activeStatuses.reduce(
           </select>
         </div>
 
+        <!-- Tipo de Cliente -->
+        <div class="sm:col-span-2">
+          <label for="quick-f-tipo-cliente" class="block text-xs font-bold uppercase text-primary mb-1">
+            Tipo de Cliente
+          </label>
+          <select
+            id="quick-f-tipo-cliente"
+            name="tipo_cliente"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="-">- Sin clasificar -</option>
+            <option value="VIP">1. VIP</option>
+            <option value="Secundario">2. Secundario</option>
+            <option value="Papeamento/Ingles">3. Papeamento/Ingles</option>
+            <option value="Menor importancia">4. Menor importancia</option>
+          </select>
+        </div>
+
         <!-- Pasaporte: Número -->
         <div>
           <label for="quick-f-pasaporte" class="block text-xs font-bold uppercase text-primary mb-1">
@@ -923,7 +1124,6 @@ const statusCounts = activeStatuses.reduce(
     createMidnightDate,
     evaluatePendienteForHoy,
     extractFlightDatesFromText,
-    formatDateDDMMYYYY,
   } from '@/utils/flightDateHelpers';
   import { buildWhatsAppDynamicLink, parseContactoInitial } from '@/utils/pagoHelpers';
 
@@ -938,32 +1138,46 @@ const statusCounts = activeStatuses.reduce(
   let selectedStatus = 'ALL';
   let isHoyMode = heroContainer?.dataset.initialHoy === 'true';
 
-  const bannerHoy = document.querySelector<HTMLElement>('#banner-pendientes-hoy');
+  // Referencias a los botones Hamburguesa (Estatus y Filtros) y los controles internos
+  const btnToggleStatusMenu = document.querySelector<HTMLButtonElement>('#btn-toggle-status-menu');
+  const badgeStatusActive = document.querySelector<HTMLElement>('#badge-status-active');
+  const panelStatusPendientes = document.querySelector<HTMLElement>('#panel-status-pendientes');
+  const btnClearStatusFilters = document.querySelector<HTMLButtonElement>('#btn-clear-status-filters');
+  const btnCloseStatusFilters = document.querySelector<HTMLButtonElement>('#btn-close-status-filters');
+
+  const btnToggleHamburger = document.querySelector<HTMLButtonElement>('#btn-toggle-hamburger-menu');
+  const badgeHamburgerActive = document.querySelector<HTMLElement>('#badge-hamburger-active');
+  const panelFiltrosPendientes = document.querySelector<HTMLElement>('#panel-filtros-pendientes');
+  const btnFilterVuelo = document.querySelector<HTMLButtonElement>('#btn-filter-vuelo');
+  const btnFilterEmision = document.querySelector<HTMLButtonElement>('#btn-filter-emision');
+  const btnFilterAerolinea = document.querySelector<HTMLButtonElement>('#btn-filter-aerolinea');
+  const btnFilterLocalizador = document.querySelector<HTMLButtonElement>('#btn-filter-localizador');
+
+  const dotFilterVuelo = document.querySelector<HTMLElement>('#dot-filter-vuelo');
+  const dotFilterEmision = document.querySelector<HTMLElement>('#dot-filter-emision');
+  const dotFilterAerolinea = document.querySelector<HTMLElement>('#dot-filter-aerolinea');
+  const dotFilterLocalizador = document.querySelector<HTMLElement>('#dot-filter-localizador');
+
+  const boxFilterVuelo = document.querySelector<HTMLElement>('#box-filter-vuelo');
+  const boxFilterEmision = document.querySelector<HTMLElement>('#box-filter-emision');
+  const boxFilterAerolinea = document.querySelector<HTMLElement>('#box-filter-aerolinea');
+  const boxFilterLocalizador = document.querySelector<HTMLElement>('#box-filter-localizador');
+
+  const filterVueloText = document.querySelector<HTMLInputElement>('#filter-vuelo-text');
+  const filterVueloDate = document.querySelector<HTMLInputElement>('#filter-vuelo-date');
+  const filterEmisionText = document.querySelector<HTMLInputElement>('#filter-emision-text');
+  const filterEmisionDate = document.querySelector<HTMLInputElement>('#filter-emision-date');
+  const filterAerolineaText = document.querySelector<HTMLInputElement>('#filter-aerolinea-text');
+  const filterLocalizadorText = document.querySelector<HTMLInputElement>('#filter-localizador-text');
+
+  const datalistAerolineas = document.querySelector<HTMLDataListElement>('#datalist-filter-aerolineas');
+  const btnClearQuickFilters = document.querySelector<HTMLButtonElement>('#btn-clear-quick-filters');
+  const btnCloseQuickFilters = document.querySelector<HTMLButtonElement>('#btn-close-quick-filters');
+
   const btnToggleHoy = document.querySelector<HTMLButtonElement>('#btn-toggle-pendientes-hoy');
   const badgeCountHoy = document.querySelector<HTMLElement>('#badge-count-pendientes-hoy');
-  const hoyRangeSummary = document.querySelector<HTMLElement>('#hoy-range-summary');
-  const inputHoyRefDate = document.querySelector<HTMLInputElement>('#input-hoy-ref-date');
-  const btnResetHoyDate = document.querySelector<HTMLButtonElement>('#btn-reset-hoy-date');
-  const btnExitHoyMode = document.querySelector<HTMLButtonElement>('#btn-exit-hoy-mode');
-
-  function getTodayInputIso(): string {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  if (inputHoyRefDate && !inputHoyRefDate.value) {
-    inputHoyRefDate.value = getTodayInputIso();
-  }
 
   function getReferenceDate(): Date {
-    const val = inputHoyRefDate?.value;
-    if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-      const [y, m, d] = val.split('-').map(Number);
-      return createMidnightDate(y, m, d);
-    }
     const now = new Date();
     return createMidnightDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   }
@@ -1034,6 +1248,7 @@ const statusCounts = activeStatuses.reduce(
   const quickFApellidos = document.querySelector<HTMLInputElement>('#quick-f-apellidos');
   const quickFNacimiento = document.querySelector<HTMLInputElement>('#quick-f-nacimiento');
   const quickFGenero = document.querySelector<HTMLSelectElement>('#quick-f-genero');
+  const quickFTipoCliente = document.querySelector<HTMLSelectElement>('#quick-f-tipo-cliente');
   const quickFPasaporte = document.querySelector<HTMLInputElement>('#quick-f-pasaporte');
   const quickFNacionalidad = document.querySelector<HTMLInputElement>('#quick-f-nacionalidad');
   const quickFEmision = document.querySelector<HTMLInputElement>('#quick-f-emision');
@@ -1157,35 +1372,191 @@ const statusCounts = activeStatuses.reduce(
     }, 2600);
   }
 
+  const ENGLISH_MONTH_ABBR = [
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+
+  // Evalúa si un texto de fecha (Datos del Vuelo o Fecha de Emisión) coincide con el filtro ingresado por el usuario
+  // Ejemplos: 23DEC = 23/12/YYYY, 04JAN = 04/01/YYYY (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
+  function matchesDateFilter(fieldRaw: string | undefined, filterQuery: string, refDate: Date): boolean {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return true;
+
+    const raw = (fieldRaw || '').trim();
+    if (!raw || raw === '-') return false;
+
+    const rawUpper = raw.toUpperCase();
+
+    // 1. Coincidencia directa de texto (ej. "22nov", "marcur", "02/11/26", "14dec", "jan", "dec")
+    if (raw.toLowerCase().includes(q)) {
+      return true;
+    }
+
+    // 2. Conversión explícita DD/MM/YYYY <-> DDMMM (ej. "23/12/2026" o "23/12/26" -> "23DEC", "04/01/2027" -> "04JAN")
+    const queryDates = extractFlightDatesFromText(q, refDate);
+    if (queryDates.length > 0) {
+      for (const qd of queryDates) {
+        const monthAbbr = ENGLISH_MONTH_ABBR[qd.month - 1];
+        if (monthAbbr) {
+          const ddPad = String(qd.day).padStart(2, '0');
+          const dNoPad = String(qd.day);
+          // Verifica si el código de vuelo contiene "23DEC", "23 DEC", "4JAN", "04JAN", etc.
+          if (
+            rawUpper.includes(`${ddPad}${monthAbbr}`) ||
+            rawUpper.includes(`${ddPad} ${monthAbbr}`) ||
+            rawUpper.includes(`${dNoPad}${monthAbbr}`) ||
+            rawUpper.includes(`${dNoPad} ${monthAbbr}`)
+          ) {
+            return true;
+          }
+        }
+      }
+
+      // 3. Comparación por día y mes extraídos de todas las fechas del registro
+      const recordDates = extractFlightDatesFromText(raw, refDate);
+      if (recordDates.length > 0) {
+        const hasExplicitNumericYearInQuery = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(q);
+        const hasExplicitNumericYearInRecord = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(raw);
+        for (const qd of queryDates) {
+          for (const rd of recordDates) {
+            if (qd.day === rd.day && qd.month === rd.month) {
+              if (hasExplicitNumericYearInQuery && hasExplicitNumericYearInRecord) {
+                if (qd.year === rd.year) return true;
+              } else {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function populateQuickFilterDatalists() {
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const airlinesSet = new Set<string>(
+      KNOWN_AIRLINES.map((a) => a.toUpperCase())
+    );
+
+    for (const row of rows) {
+      try {
+        const rec = JSON.parse(row.dataset.rowRecord || '') as ClienteRecord;
+        const parsed = parseCodigo(rec.codigo || '', rec);
+        const aero = (rec.aerolinea && rec.aerolinea !== '-' ? rec.aerolinea : parsed.aerolinea).trim();
+        if (aero && aero !== '-') airlinesSet.add(aero.toUpperCase());
+      } catch {}
+    }
+
+    if (datalistAerolineas) {
+      datalistAerolineas.innerHTML = Array.from(airlinesSet)
+        .sort((a, b) => a.localeCompare(b, 'es'))
+        .map((a) => `<option value="${a}"></option>`)
+        .join('');
+    }
+  }
+
+  function styleQuickFilterState(
+    _btn: HTMLButtonElement | null,
+    dot: HTMLElement | null,
+    box: HTMLElement | null,
+    isActive: boolean
+  ) {
+    if (dot) {
+      dot.classList.toggle('hidden', !isActive);
+    }
+    if (box) {
+      if (isActive) {
+        box.classList.remove('border-base-border', 'bg-base-muted/50');
+        box.classList.add('border-primary', 'bg-primary/5', 'ring-1', 'ring-primary/20');
+      } else {
+        box.classList.add('border-base-border', 'bg-base-muted/50');
+        box.classList.remove('border-primary', 'bg-primary/5', 'ring-1', 'ring-primary/20');
+      }
+    }
+  }
+
   function applyFilters() {
     if (!tbody) return;
     const query = (searchInput?.value ?? '').toLowerCase().trim();
-    const refDate = getReferenceDate();
-    const tomorrowDate = createMidnightDate(
-      refDate.getFullYear(),
-      refDate.getMonth() + 1,
-      refDate.getDate() + 1
-    );
-    const yesterdayDate = createMidnightDate(
-      refDate.getFullYear(),
-      refDate.getMonth() + 1,
-      refDate.getDate() - 1
-    );
+    const qVuelo = (filterVueloText?.value ?? '').trim();
+    const qEmision = (filterEmisionText?.value ?? '').trim();
+    const qAerolinea = (filterAerolineaText?.value ?? '').toLowerCase().trim();
+    const qLocalizador = (filterLocalizadorText?.value ?? '').toLowerCase().trim();
 
-    if (hoyRangeSummary) {
-      const strHoy = formatDateDDMMYYYY(refDate.getDate(), refDate.getMonth() + 1, refDate.getFullYear());
-      const strManana = formatDateDDMMYYYY(
-        tomorrowDate.getDate(),
-        tomorrowDate.getMonth() + 1,
-        tomorrowDate.getFullYear()
-      );
-      const strAyer = formatDateDDMMYYYY(
-        yesterdayDate.getDate(),
-        yesterdayDate.getMonth() + 1,
-        yesterdayDate.getFullYear()
-      );
-      hoyRangeSummary.textContent = `Vuelos: Hoy (${strHoy}) y Mañana (${strManana}) | Reserva 24h por vencer: Ayer (${strAyer}) y Hoy (${strHoy})`;
+    styleQuickFilterState(btnFilterVuelo, dotFilterVuelo, boxFilterVuelo, Boolean(qVuelo));
+    styleQuickFilterState(btnFilterEmision, dotFilterEmision, boxFilterEmision, Boolean(qEmision));
+    styleQuickFilterState(btnFilterAerolinea, dotFilterAerolinea, boxFilterAerolinea, Boolean(qAerolinea));
+    styleQuickFilterState(btnFilterLocalizador, dotFilterLocalizador, boxFilterLocalizador, Boolean(qLocalizador));
+
+    const activeStatusFilterCount =
+      (selectedStatus !== 'ALL' ? 1 : 0) +
+      (isHoyMode ? 1 : 0);
+
+    const activeFilterCount =
+      (qVuelo ? 1 : 0) +
+      (qEmision ? 1 : 0) +
+      (qAerolinea ? 1 : 0) +
+      (qLocalizador ? 1 : 0);
+
+    if (badgeStatusActive) {
+      if (activeStatusFilterCount > 0) {
+        badgeStatusActive.textContent = String(activeStatusFilterCount);
+        badgeStatusActive.classList.remove('hidden');
+        badgeStatusActive.classList.add('inline-flex');
+      } else {
+        badgeStatusActive.classList.add('hidden');
+        badgeStatusActive.classList.remove('inline-flex');
+      }
     }
+
+    if (btnToggleStatusMenu) {
+      const isStatusOpen = panelStatusPendientes && !panelStatusPendientes.classList.contains('hidden');
+      if (activeStatusFilterCount > 0 || isStatusOpen) {
+        btnToggleStatusMenu.classList.remove('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleStatusMenu.classList.add('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      } else {
+        btnToggleStatusMenu.classList.add('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleStatusMenu.classList.remove('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      }
+    }
+
+    if (badgeHamburgerActive) {
+      if (activeFilterCount > 0) {
+        badgeHamburgerActive.textContent = String(activeFilterCount);
+        badgeHamburgerActive.classList.remove('hidden');
+        badgeHamburgerActive.classList.add('inline-flex');
+      } else {
+        badgeHamburgerActive.classList.add('hidden');
+        badgeHamburgerActive.classList.remove('inline-flex');
+      }
+    }
+
+    if (btnToggleHamburger) {
+      const isMenuOpen = panelFiltrosPendientes && !panelFiltrosPendientes.classList.contains('hidden');
+      if (activeFilterCount > 0 || isMenuOpen) {
+        btnToggleHamburger.classList.remove('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleHamburger.classList.add('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      } else {
+        btnToggleHamburger.classList.add('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleHamburger.classList.remove('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      }
+    }
+
+    const refDate = getReferenceDate();
 
     const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
 
@@ -1248,14 +1619,50 @@ const statusCounts = activeStatuses.reduce(
         id: rowId,
       });
 
+      const linkedContacto = contactosList.find(
+        (c) => c.contacto.trim().toLowerCase() === rowName.trim()
+      );
+      const contactSearchBlob = linkedContacto
+        ? `${linkedContacto.contacto} ${linkedContacto.nombres} ${linkedContacto.apellidos} ${linkedContacto.telefono} ${linkedContacto.email} ${linkedContacto.numero_pasaporte}`.toLowerCase()
+        : '';
+      const recordSearchBlob = record
+        ? `${record.contacto} ${record.solicitud_vuelo} ${record.apellidos || ''} ${record.codigo || ''} ${record.localizador || ''} ${record.aerolinea || ''} ${record.observacion || ''}`.toLowerCase()
+        : '';
+
+      const parsedCod = parseCodigo(record?.codigo || '', record ?? undefined);
+      const rowAerolinea = (
+        record?.aerolinea && record.aerolinea !== '-' ? record.aerolinea : parsedCod.aerolinea
+      ).toLowerCase();
+      const rowLocalizador = (
+        record?.localizador && record.localizador !== '-' ? record.localizador : parsedCod.localizador
+      ).toLowerCase();
+      const rowCodigoRaw = (record?.codigo || '').toLowerCase();
+
       const matchesStatus = selectedStatus === 'ALL' || rowStatus === selectedStatus;
       const matchesQuery =
         !query ||
         rowName.includes(query) ||
-        (record?.solicitud_vuelo || '').toLowerCase().includes(query);
+        recordSearchBlob.includes(query) ||
+        contactSearchBlob.includes(query);
       const matchesHoy = !isHoyMode || evalHoy.matches;
 
-      if (matchesStatus && matchesQuery && matchesHoy) {
+      // Evaluación de los 4 filtros específicos
+      const matchesVuelo = matchesDateFilter(record?.solicitud_vuelo, qVuelo, refDate);
+      const matchesEmision = matchesDateFilter(record?.fecha_gestion, qEmision, refDate);
+      const matchesAerolinea =
+        !qAerolinea || rowAerolinea.includes(qAerolinea) || rowCodigoRaw.includes(qAerolinea);
+      const matchesLocalizador =
+        !qLocalizador || rowLocalizador.includes(qLocalizador) || rowCodigoRaw.includes(qLocalizador);
+
+      if (
+        matchesStatus &&
+        matchesQuery &&
+        matchesHoy &&
+        matchesVuelo &&
+        matchesEmision &&
+        matchesAerolinea &&
+        matchesLocalizador
+      ) {
         row.style.display = '';
         visibleCount++;
       } else {
@@ -1287,14 +1694,6 @@ const statusCounts = activeStatuses.reduce(
 
     if (badgeCountHoy) {
       badgeCountHoy.textContent = String(totalHoyMatches);
-    }
-
-    if (bannerHoy) {
-      if (isHoyMode) {
-        bannerHoy.classList.remove('hidden');
-      } else {
-        bannerHoy.classList.add('hidden');
-      }
     }
 
     if (btnToggleHoy) {
@@ -1339,6 +1738,8 @@ const statusCounts = activeStatuses.reduce(
 
     const headerTotal = document.getElementById('header-total-count');
     if (headerTotal) headerTotal.textContent = String(rows.length);
+
+    populateQuickFilterDatalists();
   }
 
   function openClientModal(record: ClienteRecord) {
@@ -1388,44 +1789,204 @@ const statusCounts = activeStatuses.reduce(
     modal.showModal();
   }
 
-  // Eventos de búsqueda, Pendientes de Hoy y filtro por estatus
+  // Eventos de búsqueda, Pendientes de Hoy, los 4 filtros rápidos y filtro por estatus
   searchInput?.addEventListener('input', applyFilters);
 
-  btnToggleHoy?.addEventListener('click', () => {
-    isHoyMode = !isHoyMode;
+  function clearAllQuickFilters() {
+    if (filterVueloText) filterVueloText.value = '';
+    if (filterVueloDate) filterVueloDate.value = '';
+    if (filterEmisionText) filterEmisionText.value = '';
+    if (filterEmisionDate) filterEmisionDate.value = '';
+    if (filterAerolineaText) filterAerolineaText.value = '';
+    if (filterLocalizadorText) filterLocalizadorText.value = '';
+  }
+
+  function focusQuickFilterInput(type: string) {
+    if (!panelFiltrosPendientes) return;
+    const targetInput =
+      type === 'vuelo'
+        ? filterVueloText
+        : type === 'emision'
+          ? filterEmisionText
+          : type === 'aerolinea'
+            ? filterAerolineaText
+            : filterLocalizadorText;
+
+    panelFiltrosPendientes.classList.remove('hidden');
+    btnToggleHamburger?.setAttribute('aria-expanded', 'true');
+    applyFilters();
+    window.setTimeout(() => {
+      targetInput?.focus();
+      targetInput?.select();
+    }, 20);
+  }
+
+  btnToggleStatusMenu?.addEventListener('click', () => {
+    if (!panelStatusPendientes) return;
+    const willOpen = panelStatusPendientes.classList.contains('hidden');
+    if (willOpen) {
+      panelStatusPendientes.classList.remove('hidden');
+      btnToggleStatusMenu.setAttribute('aria-expanded', 'true');
+      panelFiltrosPendientes?.classList.add('hidden');
+      btnToggleHamburger?.setAttribute('aria-expanded', 'false');
+    } else {
+      panelStatusPendientes.classList.add('hidden');
+      btnToggleStatusMenu.setAttribute('aria-expanded', 'false');
+    }
+    applyFilters();
+  });
+
+  btnToggleHamburger?.addEventListener('click', () => {
+    if (!panelFiltrosPendientes) return;
+    const willOpen = panelFiltrosPendientes.classList.contains('hidden');
+    if (willOpen) {
+      panelFiltrosPendientes.classList.remove('hidden');
+      btnToggleHamburger.setAttribute('aria-expanded', 'true');
+      panelStatusPendientes?.classList.add('hidden');
+      btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
+    } else {
+      panelFiltrosPendientes.classList.add('hidden');
+      btnToggleHamburger.setAttribute('aria-expanded', 'false');
+    }
+    applyFilters();
+  });
+
+  btnFilterVuelo?.addEventListener('click', () => focusQuickFilterInput('vuelo'));
+  btnFilterEmision?.addEventListener('click', () => focusQuickFilterInput('emision'));
+  btnFilterAerolinea?.addEventListener('click', () => focusQuickFilterInput('aerolinea'));
+  btnFilterLocalizador?.addEventListener('click', () => focusQuickFilterInput('localizador'));
+
+  filterVueloText?.addEventListener('input', () => {
+    if (filterVueloDate) filterVueloDate.value = '';
+    if (filterVueloText.value.trim()) {
+      isHoyMode = false;
+      selectedStatus = 'ALL';
+    }
     applyFilters();
     updateSelectionUI();
   });
 
-  btnExitHoyMode?.addEventListener('click', () => {
+  filterVueloDate?.addEventListener('change', () => {
+    const iso = filterVueloDate.value;
+    if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && filterVueloText) {
+      const [y, m, d] = iso.split('-');
+      filterVueloText.value = `${d}/${m}/${y.slice(-2)}`;
+      isHoyMode = false;
+      selectedStatus = 'ALL';
+    } else if (!iso && filterVueloText) {
+      filterVueloText.value = '';
+    }
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  filterEmisionText?.addEventListener('input', () => {
+    if (filterEmisionDate) filterEmisionDate.value = '';
+    if (filterEmisionText.value.trim()) {
+      isHoyMode = false;
+    }
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  filterEmisionDate?.addEventListener('change', () => {
+    const iso = filterEmisionDate.value;
+    if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && filterEmisionText) {
+      const [y, m, d] = iso.split('-');
+      filterEmisionText.value = `${d}/${m}/${y.slice(-2)}`;
+      isHoyMode = false;
+    } else if (!iso && filterEmisionText) {
+      filterEmisionText.value = '';
+    }
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  filterAerolineaText?.addEventListener('input', () => {
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  filterLocalizadorText?.addEventListener('input', () => {
+    applyFilters();
+    updateSelectionUI();
+  });
+
+  btnClearStatusFilters?.addEventListener('click', () => {
+    selectedStatus = 'ALL';
     isHoyMode = false;
     applyFilters();
     updateSelectionUI();
   });
 
-  inputHoyRefDate?.addEventListener('change', () => {
+  btnCloseStatusFilters?.addEventListener('click', () => {
+    panelStatusPendientes?.classList.add('hidden');
+    btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
+    applyFilters();
+  });
+
+  btnClearQuickFilters?.addEventListener('click', () => {
+    clearAllQuickFilters();
     applyFilters();
     updateSelectionUI();
   });
 
-  btnResetHoyDate?.addEventListener('click', () => {
-    if (inputHoyRefDate) {
-      inputHoyRefDate.value = getTodayInputIso();
+  btnCloseQuickFilters?.addEventListener('click', () => {
+    panelFiltrosPendientes?.classList.add('hidden');
+    btnToggleHamburger?.setAttribute('aria-expanded', 'false');
+    applyFilters();
+  });
+
+  document.addEventListener('click', (e) => {
+    let closedAny = false;
+    if (
+      panelStatusPendientes &&
+      !panelStatusPendientes.classList.contains('hidden') &&
+      !panelStatusPendientes.contains(e.target as Node) &&
+      !btnToggleStatusMenu?.contains(e.target as Node)
+    ) {
+      panelStatusPendientes.classList.add('hidden');
+      btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
+      closedAny = true;
     }
+    if (
+      panelFiltrosPendientes &&
+      !panelFiltrosPendientes.classList.contains('hidden') &&
+      !panelFiltrosPendientes.contains(e.target as Node) &&
+      !btnToggleHamburger?.contains(e.target as Node)
+    ) {
+      panelFiltrosPendientes.classList.add('hidden');
+      btnToggleHamburger?.setAttribute('aria-expanded', 'false');
+      closedAny = true;
+    }
+    if (closedAny) {
+      applyFilters();
+    }
+  });
+
+  btnToggleHoy?.addEventListener('click', () => {
+    isHoyMode = !isHoyMode;
+    panelStatusPendientes?.classList.add('hidden');
+    btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
     applyFilters();
     updateSelectionUI();
   });
 
   resetBtn?.addEventListener('click', () => {
     selectedStatus = 'ALL';
+    isHoyMode = false;
     if (searchInput) searchInput.value = '';
+    clearAllQuickFilters();
     applyFilters();
+    updateSelectionUI();
   });
 
   document.querySelectorAll<HTMLButtonElement>('[data-status-pill]').forEach((pill) => {
     pill.addEventListener('click', () => {
       const targetStatus = pill.dataset.statusPill ?? 'ALL';
       selectedStatus = selectedStatus === targetStatus ? 'ALL' : targetStatus;
+      panelStatusPendientes?.classList.add('hidden');
+      btnToggleStatusMenu?.setAttribute('aria-expanded', 'false');
       applyFilters();
       updateSelectionUI();
     });
@@ -1813,6 +2374,7 @@ const statusCounts = activeStatuses.reduce(
     }
     if (quickFNacimiento) quickFNacimiento.value = '';
     if (quickFGenero) quickFGenero.value = '-';
+    if (quickFTipoCliente) quickFTipoCliente.value = '-';
     if (quickFPasaporte) quickFPasaporte.value = '';
     if (quickFNacionalidad) quickFNacionalidad.value = '';
     if (quickFEmision) quickFEmision.value = '';
@@ -1960,6 +2522,7 @@ const statusCounts = activeStatuses.reduce(
       apellidos: quickFApellidos?.value?.trim() || '-',
       fecha_nacimiento: quickFNacimiento?.value?.trim() || '-',
       genero: quickFGenero?.value || '-',
+      tipo_cliente: quickFTipoCliente?.value || '-',
       numero_pasaporte: quickFPasaporte?.value?.trim() || '-',
       nacionalidad_pasaporte: quickFNacionalidad?.value?.trim() || '-',
       fecha_emision_pasaporte: quickFEmision?.value?.trim() || '-',
@@ -2126,7 +2689,15 @@ const statusCounts = activeStatuses.reduce(
     await executeSavePendiente(payload);
   });
 
-  // Inicializar vista y conteo de Pendientes de Hoy al cargar
+  // Inicializar vista, listas de autocompletado de filtros y conteo de Pendientes de Hoy al cargar
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialContacto = (urlParams.get('contacto') || urlParams.get('search') || '').trim();
+    if (initialContacto && searchInput) {
+      searchInput.value = initialContacto;
+    }
+  } catch {}
+  populateQuickFilterDatalists();
   applyFilters();
   updateSelectionUI();
 </script>

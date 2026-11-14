@@ -2,14 +2,14 @@
 import { NAV_ITEMS } from '@/constants/site';
 
 interface Props {
-  activeTab?: 'pendientes' | 'pendientes-hoy' | 'pagos' | 'contactos' | 'estatus';
+  activeTab?: 'pendientes' | 'pendientes-hoy' | 'pagos' | 'contactos' | 'notas' | 'estatus';
 }
 
 const { activeTab = 'pendientes' } = Astro.props;
 ---
 
-<header class="bg-base border-b border-base-border shadow-xs sticky top-0 z-30">
-  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+<header class="shrink-0 bg-base border-b border-base-border shadow-xs z-30">
+  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <!-- Logo a la izquierda -->
       <a href="/" class="flex items-center gap-3 focus:outline-none group" aria-label="Global Travel CW">

@@ -1,241 +1,355 @@
 ---
 import { CONTACTOS_GRID_COLUMNS } from '@/constants/site';
-import type { ContactoRecord } from '@/types';
-import { buildWhatsAppDynamicLink } from '@/utils/pagoHelpers';
+import type { ContactoRecord, PendienteRecord } from '@/types';
+import { createMidnightDate, evaluatePendienteForHoy } from '@/utils/flightDateHelpers';
+import { buildWhatsAppDynamicLink, normalizePhoneForWhatsApp } from '@/utils/pagoHelpers';
 
 interface Props {
   contactos: ContactoRecord[];
+  pendientes?: PendienteRecord[];
 }
 
-const { contactos } = Astro.props;
+const { contactos, pendientes = [] } = Astro.props;
+
+const now = new Date();
+const serverRefDate = createMidnightDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+function normStr(s: string | null | undefined): string {
+  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getContactPendientes(c: ContactoRecord): PendienteRecord[] {
+  if (!pendientes || pendientes.length === 0) return [];
+  const cNorm = normStr(c.contacto);
+  const fullName = [
+    c.nombres && c.nombres !== '-' ? c.nombres.trim() : '',
+    c.apellidos && c.apellidos !== '-' ? c.apellidos.trim() : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const fullNorm = normStr(fullName);
+  const cPhone = normalizePhoneForWhatsApp(c.telefono);
+  const cContactPhone = normalizePhoneForWhatsApp(c.contacto);
+
+  return pendientes.filter((p) => {
+    const pNorm = normStr(p.contacto);
+    if (pNorm && (pNorm === cNorm || (fullNorm && pNorm === fullNorm))) {
+      return true;
+    }
+    const pPhone = normalizePhoneForWhatsApp(p.contacto);
+    if (pPhone.length >= 7 && (pPhone === cPhone || pPhone === cContactPhone)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function isPhoneLikeText(val: string | undefined | null): boolean {
+  const s = (val || '').trim();
+  if (!s || s === '-') return false;
+  return /^[\d\s\+\-\(\)\.]+$/.test(s);
+}
+
+function isContactoSinNombre(c: Partial<ContactoRecord>): boolean {
+  const contactoStr = (c.contacto || '').trim();
+  const telStr = (c.telefono || '').trim();
+  const nombresStr = (c.nombres || '').trim();
+  const apellidosStr = (c.apellidos || '').trim();
+
+  const hasValidNombres = Boolean(nombresStr && nombresStr !== '-' && !isPhoneLikeText(nombresStr));
+  const hasValidApellidos = Boolean(apellidosStr && apellidosStr !== '-' && !isPhoneLikeText(apellidosStr));
+
+  // Si el identificador principal (Cliente / Contacto) es solo números/teléfono o igual al teléfono, no tiene nombre guardado
+  if (!contactoStr || contactoStr === '-' || isPhoneLikeText(contactoStr)) return true;
+  if (telStr && telStr !== '-' && contactoStr.toLowerCase() === telStr.toLowerCase()) return true;
+
+  // Si después de quitar el teléfono del campo contacto no queda ninguna letra y tampoco tiene Nombres/Apellidos
+  const contactoWithoutPhone = telStr && telStr !== '-' ? contactoStr.replace(telStr, '').trim() : contactoStr;
+  const hasLettersInContacto = /[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]{2,}/.test(contactoWithoutPhone);
+  if (!hasLettersInContacto && !hasValidNombres && !hasValidApellidos) return true;
+
+  return false;
+}
 
 const totalContactos = contactos.length;
 const conTelefono = contactos.filter((c) => c.telefono && c.telefono.trim() !== '-' && c.telefono.trim() !== '').length;
 const sinTelefono = totalContactos - conTelefono;
+const sinNombre = contactos.filter((c) => isContactoSinNombre(c)).length;
 const conPasaporte = contactos.filter((c) => c.numero_pasaporte && c.numero_pasaporte !== '-').length;
 const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
+const totalVip = contactos.filter((c) => (c.tipo_cliente || '-') === 'VIP').length;
+const totalSecundario = contactos.filter((c) => (c.tipo_cliente || '-') === 'Secundario').length;
+const totalPapeamento = contactos.filter((c) => (c.tipo_cliente || '-') === 'Papeamento/Ingles').length;
+const totalMenor = contactos.filter((c) => (c.tipo_cliente || '-') === 'Menor importancia').length;
+
+function getTipoClienteBadgeClass(tipo?: string): string {
+  switch ((tipo || '-').trim()) {
+    case 'VIP':
+      return 'bg-emerald-800 text-white border border-emerald-950';
+    case 'Secundario':
+      return 'bg-purple-600 text-white border border-purple-700';
+    case 'Papeamento/Ingles':
+      return 'bg-blue-950 text-white border border-blue-950';
+    case 'Menor importancia':
+      return 'bg-slate-200 text-slate-700 border border-slate-300';
+    default:
+      return 'hidden';
+  }
+}
 ---
 
-<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-  <!-- Píldoras de Análisis y Filtros Rápidos -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-      <!-- Todos -->
-      <button
-        type="button"
-        data-filter-pill="ALL"
-        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-blue-50 border-blue-200 text-blue-900 ring-2 ring-primary scale-[1.02]"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600"></span>
-          <span class="text-xs font-bold truncate">Todos los Contactos</span>
-        </div>
-        <span
-          id="stat-total"
-          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
-        >
-          {totalContactos}
-        </span>
-      </button>
-
-      <!-- Con Teléfono -->
-      <button
-        type="button"
-        data-filter-pill="CON_TEL"
-        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-900"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600"></span>
-          <span class="text-xs font-bold truncate">Con Teléfono</span>
-        </div>
-        <span
-          id="stat-tel"
-          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
-        >
-          {conTelefono}
-        </span>
-      </button>
-
-      <!-- Sin Teléfono -->
-      <button
-        type="button"
-        data-filter-pill="SIN_TEL"
-        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-rose-50 border-rose-200 text-rose-900"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-secondary"></span>
-          <span class="text-xs font-bold truncate">Sin Teléfono</span>
-        </div>
-        <span
-          id="stat-sin-tel"
-          class="inline-flex items-center justify-center rounded-md bg-base/80 text-secondary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
-        >
-          {sinTelefono}
-        </span>
-      </button>
-
-      <!-- Con Pasaporte -->
-      <button
-        type="button"
-        data-filter-pill="CON_PAS"
-        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-purple-50 border-purple-200 text-purple-900"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-purple-600"></span>
-          <span class="text-xs font-bold truncate">Con Pasaporte</span>
-        </div>
-        <span
-          id="stat-pas"
-          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
-        >
-          {conPasaporte}
-        </span>
-      </button>
-
-      <!-- Con Email -->
-      <button
-        type="button"
-        data-filter-pill="CON_EMAIL"
-        class="contactos-filter-pill flex items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-left transition hover:shadow-sm cursor-pointer bg-amber-50 border-amber-200 text-amber-900"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-600"></span>
-          <span class="text-xs font-bold truncate">Con Email</span>
-        </div>
-        <span
-          id="stat-email"
-          class="inline-flex items-center justify-center rounded-md bg-base/80 text-primary px-2.5 py-0.5 text-xs font-extrabold shrink-0"
-        >
-          {conEmail}
-        </span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Barra de búsqueda + Formulario de Filtro de Contactos (al lado del buscador) + Nuevo Contacto -->
-  <div class="bg-base rounded-xl border border-base-border p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-    <form
-      id="form-filtro-contactos"
-      class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
-      onsubmit="return false;"
-    >
-      <!-- Buscador de texto -->
-      <div class="relative flex-1 max-w-md">
+<section class="flex-1 min-h-0 flex flex-col w-full max-w-[1440px] lg:w-[92%] xl:w-[88%] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3">
+  <!-- Barra principal limpia: Buscador amplio a la izquierda + Nuevo Contacto y Menú Hamburguesa a la derecha -->
+  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <!-- Buscador amplio a la izquierda -->
+    <div class="flex flex-1 items-center gap-3 min-w-0">
+      <div class="relative w-full flex-1 min-w-0 max-w-2xl">
         <input
           type="search"
           id="input-search-contactos"
           placeholder="Buscar por cliente, teléfono, nombres, pasaporte..."
-          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+          class="w-full rounded-lg border border-base-border bg-base-muted px-4 py-2 text-sm text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
         />
       </div>
-
-      <!-- Selector de Filtro al lado del buscador -->
-      <div class="flex items-center gap-2">
-        <label for="select-filtro-contactos" class="text-xs font-extrabold uppercase text-primary/70 whitespace-nowrap">
-          Filtrar:
-        </label>
-        <select
-          id="select-filtro-contactos"
-          name="filtro_contacto"
-          aria-label="Filtrar contactos por teléfono, pasaporte o email"
-          class="rounded-lg border border-base-border bg-base-muted px-3 py-2 text-xs sm:text-sm font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
-        >
-          <option value="ALL">Todos los contactos ({totalContactos})</option>
-          <option value="SIN_TEL">📵 Contactos Sin Teléfono ({sinTelefono})</option>
-          <option value="CON_TEL">📞 Contactos Con Teléfono ({conTelefono})</option>
-          <option value="CON_PAS">🛂 Con Pasaporte ({conPasaporte})</option>
-          <option value="SIN_PAS">⚠️ Sin Pasaporte ({totalContactos - conPasaporte})</option>
-          <option value="CON_EMAIL">✉️ Con Email ({conEmail})</option>
-        </select>
-
-        <!-- Botón directo rápido para ver Contactos Sin Teléfono -->
-        <button
-          type="button"
-          id="btn-toggle-sin-telefono"
-          title="Alternar vista de contactos que no tienen número de teléfono registrado"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-secondary/50 bg-rose-50 hover:bg-secondary hover:text-white text-secondary font-extrabold px-3 py-2 text-xs transition cursor-pointer whitespace-nowrap"
-        >
-          <span>📵</span>
-          <span>Sin Teléfono (<span id="btn-stat-sin-tel">{sinTelefono}</span>)</span>
-        </button>
-
-        <button
-          type="button"
-          id="btn-reset-filtro-contactos"
-          title="Restablecer búsqueda y filtros"
-          class="hidden rounded-lg border border-base-border bg-base-muted hover:bg-base px-2.5 py-2 text-xs font-bold text-primary/70 hover:text-primary transition cursor-pointer whitespace-nowrap"
-        >
-          Limpiar ✕
-        </button>
-      </div>
-    </form>
-
-    <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-primary">
-      <span id="visible-rows-counter">
-        Mostrando <strong>{contactos.length}</strong> de <strong>{contactos.length}</strong>
-      </span>
       <span
         id="d1-sync-toast"
-        class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition"
+        class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition whitespace-nowrap shrink-0"
       >
         Guardado en D1
       </span>
+    </div>
+
+    <!-- Botones a la derecha: Nuevo Contacto + Hamburguesa de Filtros -->
+    <div class="relative flex flex-wrap items-center gap-2 shrink-0">
       <button
         type="button"
         id="btn-nuevo-contacto"
-        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
+        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2 text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
       >
         <span>+</span>
         <span>Nuevo Contacto</span>
       </button>
+
+      <!-- Botón Hamburguesa que desglosa la lista de tipos de filtro -->
+      <button
+        type="button"
+        id="btn-toggle-hamburger-contactos"
+        aria-expanded="false"
+        title="Abrir lista de filtros de Contactos"
+        class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-2 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+      >
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <span id="label-hamburger-contactos">Filtros</span>
+        <span
+          id="badge-hamburger-contactos"
+          class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+        >
+          1
+        </span>
+      </button>
+
+      <!-- Menú Hamburguesa desplegable en lista vertical con los tipos de filtro -->
+      <div
+        id="panel-filtros-contactos"
+        class="hidden absolute right-0 top-full mt-2 z-50 w-72 sm:w-80 max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain bg-base rounded-xl border-2 border-primary/25 p-3 shadow-xl transition-all"
+      >
+        <div class="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-base-border">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-primary">
+            🔎 Filtrar Contactos
+          </span>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              id="btn-reset-filtro-contactos"
+              title="Restablecer búsqueda y filtros"
+              class="rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-2.5 py-1 text-xs transition cursor-pointer"
+            >
+              Limpiar
+            </button>
+            <button
+              type="button"
+              id="btn-close-hamburger-contactos"
+              title="Cerrar menú de filtros"
+              aria-label="Cerrar menú de filtros"
+              class="rounded-lg border border-base-border bg-base-muted hover:bg-base text-primary/80 font-extrabold px-2.5 py-1 text-xs leading-none transition cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <!-- 1. Todos los contactos (Azul) -->
+          <button
+            type="button"
+            data-filter-pill="ALL"
+            class="w-full rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>👥</span>
+              <span>Todos los contactos</span>
+            </span>
+            <span id="menu-stat-total" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-primary">{totalContactos}</span>
+          </button>
+
+          <!-- 2. Sin nombre (Rojo) -->
+          <button
+            type="button"
+            id="btn-toggle-sin-nombre"
+            data-filter-pill="SIN_NOMBRE"
+            title="Filtrar contactos que no tienen nombre guardado (su nombre es el mismo número de teléfono)"
+            class="w-full rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>👤</span>
+              <span>Sin nombre</span>
+            </span>
+            <span id="btn-stat-sin-nombre" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-secondary">{sinNombre}</span>
+          </button>
+
+          <!-- 3. Sin teléfono (Naranja) -->
+          <button
+            type="button"
+            id="btn-toggle-sin-telefono"
+            data-filter-pill="SIN_TEL"
+            class="w-full rounded-lg border border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>📵</span>
+              <span>Sin teléfono</span>
+            </span>
+            <span id="btn-stat-sin-tel" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-orange-800">{sinTelefono}</span>
+          </button>
+
+          <!-- 4. Sin pasaporte (Amarillo) -->
+          <button
+            type="button"
+            data-filter-pill="SIN_PAS"
+            class="w-full rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Sin pasaporte</span>
+            </span>
+            <span id="menu-stat-sin-pas" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-amber-800">{totalContactos - conPasaporte}</span>
+          </button>
+
+          <!-- 5. Con Email (Verde) -->
+          <button
+            type="button"
+            data-filter-pill="CON_EMAIL"
+            class="w-full rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>✉️</span>
+              <span>Con Email</span>
+            </span>
+            <span id="menu-stat-email" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800">{conEmail}</span>
+          </button>
+
+          <div class="my-1 border-t border-base-border pt-1.5">
+            <span class="block px-1 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-primary/60">
+              Tipo de Cliente
+            </span>
+          </div>
+
+          <!-- 6. VIP (Verde oscuro) -->
+          <button
+            type="button"
+            data-filter-pill="TIPO_VIP"
+            class="w-full rounded-lg border border-emerald-950 bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left shadow-2xs"
+          >
+            <span class="flex items-center gap-2">
+              <span>⭐</span>
+              <span>VIP</span>
+            </span>
+            <span id="menu-stat-vip" class="rounded bg-white/95 px-2 py-0.5 text-[11px] font-extrabold text-emerald-950">{totalVip}</span>
+          </button>
+
+          <!-- 7. Secundario (Morado) -->
+          <button
+            type="button"
+            data-filter-pill="TIPO_SECUNDARIO"
+            class="w-full rounded-lg border border-purple-300 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>🟣</span>
+              <span>Secundario</span>
+            </span>
+            <span id="menu-stat-secundario" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-purple-900">{totalSecundario}</span>
+          </button>
+
+          <!-- 8. Papeamento/Ingles (Azul oscuro) -->
+          <button
+            type="button"
+            data-filter-pill="TIPO_PAPEAMENTO"
+            class="w-full rounded-lg border border-blue-950 bg-blue-950 hover:bg-blue-900 text-white font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left shadow-2xs"
+          >
+            <span class="flex items-center gap-2">
+              <span>🌐</span>
+              <span>Papeamento/Ingles</span>
+            </span>
+            <span id="menu-stat-papeamento" class="rounded bg-white/95 px-2 py-0.5 text-[11px] font-extrabold text-blue-950">{totalPapeamento}</span>
+          </button>
+
+          <!-- 9. Menor importancia -->
+          <button
+            type="button"
+            data-filter-pill="TIPO_MENOR"
+            class="w-full rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+          >
+            <span class="flex items-center gap-2">
+              <span>🔹</span>
+              <span>Menor importancia</span>
+            </span>
+            <span id="menu-stat-menor" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-slate-700">{totalMenor}</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Tabla de Contactos -->
-  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+  <div class="flex-1 min-h-0 flex flex-col bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
     <div
       tabindex="0"
       role="region"
       aria-labelledby="contactos-table-caption"
       class="table-wrapper"
     >
-      <table class="clientes-table text-left text-sm">
+      <table class="clientes-table contactos-table text-left text-sm">
         <caption id="contactos-table-caption" class="sr-only">
           Directorio general de clientes y pasaportes de Global Travel CW
         </caption>
         <thead class="bg-primary text-base text-xs uppercase tracking-wider">
           <tr>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[200px]">
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary w-[42%]">
               {CONTACTOS_GRID_COLUMNS.contacto}
             </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[140px]">
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary text-center w-[22%]">
+              Tipo de Cliente
+            </th>
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary w-[36%]">
               {CONTACTOS_GRID_COLUMNS.telefono}
-            </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[160px]">
-              {CONTACTOS_GRID_COLUMNS.email}
-            </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[180px]">
-              {CONTACTOS_GRID_COLUMNS.nombre_completo}
-            </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[90px]">
-              {CONTACTOS_GRID_COLUMNS.genero}
-            </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[150px]">
-              {CONTACTOS_GRID_COLUMNS.pasaporte}
-            </th>
-            <th scope="col" class="py-3.5 px-4 font-bold border-b-2 border-secondary min-w-[120px]">
-              {CONTACTOS_GRID_COLUMNS.vencimiento}
             </th>
           </tr>
         </thead>
         <tbody id="contactos-tbody" class="divide-y divide-base-border">
           {
             contactos.map((c) => {
-              const fullName =
-                c.nombres !== '-' || c.apellidos !== '-'
-                  ? `${c.nombres !== '-' ? c.nombres : ''} ${c.apellidos !== '-' ? c.apellidos : ''}`.trim()
-                  : '-';
               const waInfo = buildWhatsAppDynamicLink(c.contacto, c.telefono);
+              const tipoClienteVal = (c.tipo_cliente || '-').trim();
+              const hasTipoBadge = tipoClienteVal && tipoClienteVal !== '-';
+              const matchedPendientes = getContactPendientes(c);
+              const hasPendiente = matchedPendientes.length > 0;
+              const hoyMatches = matchedPendientes
+                .map((p) => ({ p, eval: evaluatePendienteForHoy(p, serverRefDate) }))
+                .filter((item) => item.eval.matches);
+              const hasPendienteHoy = hoyMatches.length > 0;
+              const targetPendienteQuery = matchedPendientes[0]?.contacto || c.contacto;
+              const hoyLabels = hoyMatches.map((m) => m.eval.matchLabel).join(' | ');
               return (
                 <tr
                   tabindex="0"
@@ -245,97 +359,132 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
                   data-row-contacto={c.contacto}
                   data-row-tel={c.telefono}
                   data-row-has-tel={c.telefono && c.telefono !== '-' ? '1' : '0'}
+                  data-row-sin-nombre={isContactoSinNombre(c) ? '1' : '0'}
                   data-row-has-pas={c.numero_pasaporte && c.numero_pasaporte !== '-' ? '1' : '0'}
                   data-row-has-email={c.email && c.email !== '-' ? '1' : '0'}
+                  data-row-tipo-cliente={tipoClienteVal || '-'}
                   data-row-record={JSON.stringify(c)}
+                  data-row-pendientes={hasPendiente ? JSON.stringify(matchedPendientes) : ''}
                   class="hover:bg-base-muted focus:bg-base-muted focus:outline-none transition-colors cursor-pointer"
                 >
                   <th
                     scope="row"
                     data-cell-contacto={c.id}
-                    class="py-3.5 px-4 font-bold text-primary border-r border-base-border align-middle"
+                    class="py-2.5 px-4 font-bold text-primary border-r border-base-border align-middle"
                   >
-                    <div class="flex items-center justify-between gap-2">
-                      <span data-name-for={c.id} class="text-sm leading-snug">{c.contacto}</span>
-                      <a
-                        href={waInfo.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-whatsapp-link="true"
-                        data-wa-for={c.id}
-                        title={waInfo.label}
-                        aria-label={waInfo.label}
-                        class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xs transition transform hover:scale-105"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.126.556 4.124 1.531 5.86L0 24l6.335-1.652c1.688.919 3.621 1.444 5.666 1.444 6.627 0 12-5.373 12-12s-5.373-12-11.993-12z"/></svg>
-                      </a>
-                    </div>
+                    <span data-name-for={c.id} class="text-sm leading-snug">{c.contacto}</span>
                   </th>
 
                   <td
+                    data-cell-tipo-cliente={c.id}
+                    class="py-2.5 px-4 text-center border-r border-base-border align-middle whitespace-nowrap"
+                  >
+                    <span
+                      data-tipo-badge-for={c.id}
+                      class={`inline-flex items-center justify-center rounded-md px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide leading-tight ${
+                        hasTipoBadge ? getTipoClienteBadgeClass(tipoClienteVal) : 'hidden'
+                      }`}
+                    >
+                      {hasTipoBadge ? tipoClienteVal : ''}
+                    </span>
+                    <span
+                      data-tipo-placeholder-for={c.id}
+                      class={hasTipoBadge ? 'hidden' : 'text-xs text-primary/40 font-normal'}
+                    >
+                      -
+                    </span>
+                  </td>
+
+                  <td
                     data-cell-telefono={c.id}
-                    class="py-3.5 px-4 align-middle text-xs font-semibold text-primary/90 whitespace-nowrap"
+                    class="py-2.5 px-4 align-middle text-xs font-semibold text-primary/90 whitespace-nowrap"
                   >
-                    {c.telefono !== '-' ? (
-                      <span class="text-primary font-mono">{c.telefono}</span>
-                    ) : (
-                      <span class="text-primary/40 font-normal">-</span>
-                    )}
-                  </td>
-
-                  <td
-                    data-cell-email={c.id}
-                    class="py-3.5 px-4 align-middle text-xs text-primary/80"
-                  >
-                    {c.email !== '-' ? (
-                      <span class="text-blue-600 font-medium">{c.email}</span>
-                    ) : (
-                      <span class="text-primary/40 font-normal">-</span>
-                    )}
-                  </td>
-
-                  <td
-                    data-cell-fullname={c.id}
-                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary"
-                  >
-                    {fullName}
-                  </td>
-
-                  <td
-                    data-cell-genero={c.id}
-                    class="py-3.5 px-4 align-middle text-xs text-primary/80 whitespace-nowrap"
-                  >
-                    {c.genero}
-                  </td>
-
-                  <td
-                    data-cell-pasaporte={c.id}
-                    class="py-3.5 px-4 align-middle text-xs font-mono font-bold"
-                  >
-                    {c.numero_pasaporte !== '-' ? (
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-secondary">{c.numero_pasaporte}</span>
-                        {c.nacionalidad_pasaporte !== '-' && (
-                          <span class="text-[10px] uppercase font-sans font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                            {c.nacionalidad_pasaporte}
-                          </span>
+                    <div class="flex items-center justify-between gap-3 flex-1 w-full">
+                      <span data-tel-text-for={c.id}>
+                        {c.telefono !== '-' ? (
+                          <span class="text-primary font-mono">{c.telefono}</span>
+                        ) : (
+                          <span class="text-primary/40 font-normal">-</span>
                         )}
-                      </div>
-                    ) : (
-                      <span class="text-primary/40 font-normal font-sans">-</span>
-                    )}
-                  </td>
+                      </span>
 
-                  <td
-                    data-cell-vencimiento={c.id}
-                    class="py-3.5 px-4 align-middle text-xs font-medium text-primary whitespace-nowrap"
-                  >
-                    {c.fecha_vencimiento_pasaporte}
+                      <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                        <a
+                          href={`/pendientes-hoy?contacto=${encodeURIComponent(targetPendienteQuery)}`}
+                          data-pendiente-hoy-link="true"
+                          data-hoy-for={c.id}
+                          title={
+                            hasPendienteHoy
+                              ? `Pendiente para HOY (${hoyLabels}) — Ir a Pendientes Hoy`
+                              : 'Pendiente para Hoy'
+                          }
+                          aria-label={`Ver pendiente de hoy de ${c.contacto}`}
+                          class={`${
+                            hasPendienteHoy ? 'inline-flex' : 'hidden'
+                          } items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white shadow-xs transition transform hover:scale-105`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                            <path d="M12 14v4" />
+                            <path d="M12 14h2" />
+                          </svg>
+                        </a>
+
+                        {hasPendiente && (
+                          <a
+                            href={`/?contacto=${encodeURIComponent(targetPendienteQuery)}`}
+                            data-pendiente-link="true"
+                            data-pendiente-for={c.id}
+                            title={`Ir al pendiente de ${c.contacto} (${matchedPendientes.length} pendiente${matchedPendientes.length > 1 ? 's' : ''})`}
+                            aria-label={`Ir al pendiente de ${c.contacto}`}
+                            class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-white shadow-xs transition transform hover:scale-105"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+                              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+                              <rect x="9" y="3" width="6" height="4" rx="1" />
+                              <path d="M9 12h6" />
+                              <path d="M9 16h4" />
+                            </svg>
+                          </a>
+                        )}
+
+                        <a
+                          href={waInfo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-whatsapp-link="true"
+                          data-wa-for={c.id}
+                          title={waInfo.label}
+                          aria-label={waInfo.label}
+                          class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xs transition transform hover:scale-105"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.126.556 4.124 1.531 5.86L0 24l6.335-1.652c1.688.919 3.621 1.444 5.666 1.444 6.627 0 12-5.373 12-12s-5.373-12-11.993-12z"/></svg>
+                        </a>
+                        <button
+                          type="button"
+                          data-delete-contacto={c.id}
+                          data-delete-name={c.contacto}
+                          title={`Eliminar contacto de ${c.contacto}`}
+                          aria-label={`Eliminar contacto de ${c.contacto}`}
+                          class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary hover:bg-secondary hover:text-base active:bg-secondary-dark shadow-xs transition cursor-pointer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        </button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               );
             })
           }
+          <tr id="contactos-empty-filter-row" class="hidden" hidden>
+            <td colspan="3" class="py-10 px-4 text-center text-sm font-semibold text-primary/70">
+              No se encontraron contactos para el filtro seleccionado.
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -477,6 +626,30 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
           </select>
         </div>
 
+        <!-- Tipo de Cliente -->
+        <div class="sm:col-span-2">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <label for="field-contacto-tipo-cliente" class="block text-xs font-bold uppercase text-primary">
+              Tipo de Cliente
+            </label>
+            <span
+              id="preview-badge-tipo-cliente"
+              class="hidden items-center rounded-md px-2 py-0.5 text-[10px] font-extrabold tracking-wide leading-tight"
+            ></span>
+          </div>
+          <select
+            id="field-contacto-tipo-cliente"
+            name="tipo_cliente"
+            class="w-full rounded-lg border border-base-border bg-base-muted px-3 py-2 font-bold text-primary focus:border-primary focus:bg-base focus:outline-none cursor-pointer"
+          >
+            <option value="-">- Sin clasificar -</option>
+            <option value="VIP">1. VIP</option>
+            <option value="Secundario">2. Secundario</option>
+            <option value="Papeamento/Ingles">3. Papeamento/Ingles</option>
+            <option value="Menor importancia">4. Menor importancia</option>
+          </select>
+        </div>
+
         <!-- Pasaporte: Número -->
         <div>
           <label for="field-contacto-pasaporte" class="block text-xs font-bold uppercase text-primary mb-1">
@@ -568,18 +741,68 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 </dialog>
 
 <script>
-  import type { ContactoRecord } from '@/types';
+  import type { ContactoRecord, PendienteRecord } from '@/types';
+  import { createMidnightDate, evaluatePendienteForHoy } from '@/utils/flightDateHelpers';
   import { buildWhatsAppDynamicLink } from '@/utils/pagoHelpers';
 
-  const searchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
-  const selectFiltro = document.querySelector<HTMLSelectElement>('#select-filtro-contactos');
-  const btnToggleSinTel = document.querySelector<HTMLButtonElement>('#btn-toggle-sin-telefono');
-  const btnResetFiltro = document.querySelector<HTMLButtonElement>('#btn-reset-filtro-contactos');
   let selectedFilter = 'ALL';
   const tbody = document.querySelector<HTMLTableSectionElement>('#contactos-tbody');
-  const visibleCounter = document.querySelector<HTMLElement>('#visible-rows-counter');
   const syncToast = document.querySelector<HTMLElement>('#d1-sync-toast');
   const btnNuevoContacto = document.querySelector<HTMLButtonElement>('#btn-nuevo-contacto');
+
+  const FILTER_LABELS: Record<string, string> = {
+    ALL: 'Filtros',
+    SIN_NOMBRE: 'Filtros: Sin Nombre',
+    CON_TEL: 'Filtros: Con Teléfono',
+    SIN_TEL: 'Filtros: Sin Teléfono',
+    CON_PAS: 'Filtros: Con Pasaporte',
+    SIN_PAS: 'Filtros: Sin Pasaporte',
+    CON_EMAIL: 'Filtros: Con Email',
+    TIPO_VIP: 'Filtros: VIP',
+    TIPO_SECUNDARIO: 'Filtros: Secundario',
+    TIPO_PAPEAMENTO: 'Filtros: Papeamento/Ingles',
+    TIPO_MENOR: 'Filtros: Menor importancia',
+  };
+
+  function getTipoClienteBadgeClass(tipo?: string): string {
+    switch ((tipo || '-').trim()) {
+      case 'VIP':
+        return 'bg-emerald-800 text-white border border-emerald-950';
+      case 'Secundario':
+        return 'bg-purple-600 text-white border border-purple-700';
+      case 'Papeamento/Ingles':
+        return 'bg-blue-950 text-white border border-blue-950';
+      case 'Menor importancia':
+        return 'bg-slate-200 text-slate-700 border border-slate-300';
+      default:
+        return 'hidden';
+    }
+  }
+
+  function isPhoneLikeText(val: string | undefined | null): boolean {
+    const s = (val || '').trim();
+    if (!s || s === '-') return false;
+    return /^[\d\s\+\-\(\)\.]+$/.test(s);
+  }
+
+  function isContactoSinNombre(c: Partial<ContactoRecord>): boolean {
+    const contactoStr = (c.contacto || '').trim();
+    const telStr = (c.telefono || '').trim();
+    const nombresStr = (c.nombres || '').trim();
+    const apellidosStr = (c.apellidos || '').trim();
+
+    const hasValidNombres = Boolean(nombresStr && nombresStr !== '-' && !isPhoneLikeText(nombresStr));
+    const hasValidApellidos = Boolean(apellidosStr && apellidosStr !== '-' && !isPhoneLikeText(apellidosStr));
+
+    if (!contactoStr || contactoStr === '-' || isPhoneLikeText(contactoStr)) return true;
+    if (telStr && telStr !== '-' && contactoStr.toLowerCase() === telStr.toLowerCase()) return true;
+
+    const contactoWithoutPhone = telStr && telStr !== '-' ? contactoStr.replace(telStr, '').trim() : contactoStr;
+    const hasLettersInContacto = /[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]{2,}/.test(contactoWithoutPhone);
+    if (!hasLettersInContacto && !hasValidNombres && !hasValidApellidos) return true;
+
+    return false;
+  }
 
   // Modal Contacto
   const modal = document.querySelector<HTMLDialogElement>('#modal-contacto');
@@ -599,10 +822,26 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   const fApellidos = document.querySelector<HTMLInputElement>('#field-contacto-apellidos');
   const fNacimiento = document.querySelector<HTMLInputElement>('#field-contacto-nacimiento');
   const fGenero = document.querySelector<HTMLSelectElement>('#field-contacto-genero');
+  const fTipoCliente = document.querySelector<HTMLSelectElement>('#field-contacto-tipo-cliente');
+  const previewBadgeTipoCliente = document.querySelector<HTMLElement>('#preview-badge-tipo-cliente');
   const fPasaporte = document.querySelector<HTMLInputElement>('#field-contacto-pasaporte');
   const fNacionalidad = document.querySelector<HTMLInputElement>('#field-contacto-nacionalidad');
   const fEmision = document.querySelector<HTMLInputElement>('#field-contacto-emision');
   const fVencimiento = document.querySelector<HTMLInputElement>('#field-contacto-vencimiento');
+
+  function updateModalTipoBadgePreview() {
+    if (!previewBadgeTipoCliente || !fTipoCliente) return;
+    const val = (fTipoCliente.value || '-').trim();
+    if (!val || val === '-') {
+      previewBadgeTipoCliente.textContent = '';
+      previewBadgeTipoCliente.className = 'hidden items-center rounded-md px-2 py-0.5 text-[10px] font-extrabold tracking-wide leading-tight';
+      return;
+    }
+    previewBadgeTipoCliente.textContent = val;
+    previewBadgeTipoCliente.className = `inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-extrabold tracking-wide leading-tight ${getTipoClienteBadgeClass(val)}`;
+  }
+
+  fTipoCliente?.addEventListener('change', updateModalTipoBadgePreview);
 
   function showSyncToast(text = 'Guardado en D1') {
     if (!syncToast) return;
@@ -614,45 +853,104 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
   }
 
   function applyFilters() {
-    if (!tbody) return;
-    const query = (searchInput?.value ?? '').toLowerCase().trim();
-    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const currentTbody = document.querySelector<HTMLTableSectionElement>('#contactos-tbody');
+    if (!currentTbody) return;
+
+    const currentSearchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
+    const currentBtnHamburger = document.querySelector<HTMLButtonElement>('#btn-toggle-hamburger-contactos');
+    const currentLabelHamburger = document.querySelector<HTMLElement>('#label-hamburger-contactos');
+    const currentBadgeHamburger = document.querySelector<HTMLElement>('#badge-hamburger-contactos');
+    const currentPanelFiltros = document.querySelector<HTMLElement>('#panel-filtros-contactos');
+    const emptyFilterRow = document.querySelector<HTMLTableRowElement>('#contactos-empty-filter-row');
+
+    const query = (currentSearchInput?.value ?? '').toLowerCase().trim();
+    const rows = Array.from(currentTbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
 
     let visibleCount = 0;
-    for (const row of rows) {
-      const recordStr = row.dataset.rowRecord || '';
-      const rec = JSON.parse(recordStr) as ContactoRecord;
 
-      const fullSearch = `${rec.contacto} ${rec.telefono} ${rec.email} ${rec.nombres} ${rec.apellidos} ${rec.numero_pasaporte} ${rec.nacionalidad_pasaporte}`.toLowerCase();
+    for (const row of rows) {
+      let rec: Partial<ContactoRecord> | null = null;
+      const recordStr = row.dataset.rowRecord || '';
+      if (recordStr) {
+        try {
+          rec = JSON.parse(recordStr) as ContactoRecord;
+        } catch {
+          rec = null;
+        }
+      }
+
+      const fullSearch = rec
+        ? `${rec.contacto || ''} ${rec.telefono || ''} ${rec.email || ''} ${rec.nombres || ''} ${rec.apellidos || ''} ${rec.numero_pasaporte || ''} ${rec.nacionalidad_pasaporte || ''} ${rec.tipo_cliente || ''}`.toLowerCase()
+        : (row.textContent || '').toLowerCase();
       const matchesQuery = !query || fullSearch.includes(query);
 
-      const hasTel = Boolean(rec.telefono && rec.telefono.trim() !== '-' && rec.telefono.trim() !== '');
-      const hasPas = Boolean(rec.numero_pasaporte && rec.numero_pasaporte.trim() !== '-' && rec.numero_pasaporte.trim() !== '');
-      const hasEmail = Boolean(rec.email && rec.email.trim() !== '-' && rec.email.trim() !== '');
+      const hasTel =
+        row.dataset.rowHasTel !== undefined
+          ? row.dataset.rowHasTel === '1'
+          : Boolean(rec?.telefono && rec.telefono.trim() !== '-' && rec.telefono.trim() !== '');
+      const sinNombre =
+        rec !== null
+          ? isContactoSinNombre(rec)
+          : row.dataset.rowSinNombre === '1';
+      const hasPas =
+        row.dataset.rowHasPas !== undefined
+          ? row.dataset.rowHasPas === '1'
+          : Boolean(rec?.numero_pasaporte && rec.numero_pasaporte.trim() !== '-' && rec.numero_pasaporte.trim() !== '');
+      const hasEmail =
+        row.dataset.rowHasEmail !== undefined
+          ? row.dataset.rowHasEmail === '1'
+          : Boolean(rec?.email && rec.email.trim() !== '-' && rec.email.trim() !== '');
+      const tipoCliente = (
+        row.dataset.rowTipoCliente ||
+        rec?.tipo_cliente ||
+        '-'
+      ).trim();
 
       let matchesFilter = true;
       if (selectedFilter === 'CON_TEL') {
         matchesFilter = hasTel;
       } else if (selectedFilter === 'SIN_TEL') {
         matchesFilter = !hasTel;
+      } else if (selectedFilter === 'SIN_NOMBRE') {
+        matchesFilter = sinNombre;
       } else if (selectedFilter === 'CON_PAS') {
         matchesFilter = hasPas;
       } else if (selectedFilter === 'SIN_PAS') {
         matchesFilter = !hasPas;
       } else if (selectedFilter === 'CON_EMAIL') {
         matchesFilter = hasEmail;
+      } else if (selectedFilter === 'TIPO_VIP') {
+        matchesFilter = tipoCliente === 'VIP';
+      } else if (selectedFilter === 'TIPO_SECUNDARIO') {
+        matchesFilter = tipoCliente === 'Secundario';
+      } else if (selectedFilter === 'TIPO_PAPEAMENTO') {
+        matchesFilter = tipoCliente === 'Papeamento/Ingles';
+      } else if (selectedFilter === 'TIPO_MENOR') {
+        matchesFilter = tipoCliente === 'Menor importancia';
       }
 
       if (matchesQuery && matchesFilter) {
         row.style.display = '';
+        row.classList.remove('hidden');
+        row.hidden = false;
         visibleCount++;
       } else {
         row.style.display = 'none';
+        row.classList.add('hidden');
+        row.hidden = true;
       }
     }
 
-    if (visibleCounter) {
-      visibleCounter.innerHTML = `Mostrando <strong>${visibleCount}</strong> de <strong>${rows.length}</strong>`;
+    if (emptyFilterRow) {
+      if (visibleCount === 0) {
+        emptyFilterRow.style.display = '';
+        emptyFilterRow.classList.remove('hidden');
+        emptyFilterRow.hidden = false;
+      } else {
+        emptyFilterRow.style.display = 'none';
+        emptyFilterRow.classList.add('hidden');
+        emptyFilterRow.hidden = true;
+      }
     }
 
     document.querySelectorAll<HTMLButtonElement>('[data-filter-pill]').forEach((pill) => {
@@ -663,56 +961,97 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       }
     });
 
-    if (selectFiltro && selectFiltro.value !== selectedFilter) {
-      selectFiltro.value = selectedFilter;
+    const isFilterActive = selectedFilter !== 'ALL';
+    if (currentLabelHamburger) {
+      currentLabelHamburger.textContent = FILTER_LABELS[selectedFilter] || 'Filtros';
     }
-
-    if (btnToggleSinTel) {
-      if (selectedFilter === 'SIN_TEL') {
-        btnToggleSinTel.classList.remove('bg-rose-50', 'text-secondary');
-        btnToggleSinTel.classList.add('bg-secondary', 'text-white', 'ring-2', 'ring-secondary/40');
+    if (currentBadgeHamburger) {
+      if (isFilterActive) {
+        currentBadgeHamburger.textContent = '1';
+        currentBadgeHamburger.classList.remove('hidden');
+        currentBadgeHamburger.classList.add('inline-flex');
       } else {
-        btnToggleSinTel.classList.add('bg-rose-50', 'text-secondary');
-        btnToggleSinTel.classList.remove('bg-secondary', 'text-white', 'ring-2', 'ring-secondary/40');
+        currentBadgeHamburger.classList.add('hidden');
+        currentBadgeHamburger.classList.remove('inline-flex');
       }
     }
 
-    if (btnResetFiltro) {
-      if (selectedFilter !== 'ALL' || Boolean(query)) {
-        btnResetFiltro.classList.remove('hidden');
+    if (currentBtnHamburger) {
+      const isMenuOpen = currentPanelFiltros && !currentPanelFiltros.classList.contains('hidden');
+      if (isFilterActive || isMenuOpen) {
+        currentBtnHamburger.classList.remove('bg-base-muted', 'text-primary', 'border-primary/30');
+        currentBtnHamburger.classList.add('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
       } else {
-        btnResetFiltro.classList.add('hidden');
+        currentBtnHamburger.classList.add('bg-base-muted', 'text-primary', 'border-primary/30');
+        currentBtnHamburger.classList.remove('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
       }
     }
   }
 
   function recalculateStats() {
-    if (!tbody) return;
-    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+    const currentTbody = document.querySelector<HTMLTableSectionElement>('#contactos-tbody');
+    if (!currentTbody) return;
+    const rows = Array.from(currentTbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
     let telCount = 0;
+    let sinNombreCount = 0;
     let pasCount = 0;
     let emailCount = 0;
+    let vipCount = 0;
+    let secundarioCount = 0;
+    let papeamentoCount = 0;
+    let menorCount = 0;
 
     for (const row of rows) {
       if (row.dataset.rowHasTel === '1') telCount++;
+      if (row.dataset.rowSinNombre === '1') sinNombreCount++;
       if (row.dataset.rowHasPas === '1') pasCount++;
       if (row.dataset.rowHasEmail === '1') emailCount++;
+      const tc = (row.dataset.rowTipoCliente || '-').trim();
+      if (tc === 'VIP') vipCount++;
+      else if (tc === 'Secundario') secundarioCount++;
+      else if (tc === 'Papeamento/Ingles') papeamentoCount++;
+      else if (tc === 'Menor importancia') menorCount++;
     }
 
     const sinTelCount = rows.length - telCount;
+    const sinPasCount = rows.length - pasCount;
     const statTotal = document.querySelector('#stat-total');
+    const menuStatTotal = document.querySelector('#menu-stat-total');
     const statTel = document.querySelector('#stat-tel');
+    const menuStatTel = document.querySelector('#menu-stat-tel');
     const statSinTel = document.querySelector('#stat-sin-tel');
     const btnStatSinTel = document.querySelector('#btn-stat-sin-tel');
+    const statSinNombre = document.querySelector('#stat-sin-nombre');
+    const btnStatSinNombre = document.querySelector('#btn-stat-sin-nombre');
     const statPas = document.querySelector('#stat-pas');
+    const menuStatPas = document.querySelector('#menu-stat-pas');
+    const statSinPas = document.querySelector('#stat-sin-pas');
+    const menuStatSinPas = document.querySelector('#menu-stat-sin-pas');
     const statEmail = document.querySelector('#stat-email');
+    const menuStatEmail = document.querySelector('#menu-stat-email');
+    const menuStatVip = document.querySelector('#menu-stat-vip');
+    const menuStatSecundario = document.querySelector('#menu-stat-secundario');
+    const menuStatPapeamento = document.querySelector('#menu-stat-papeamento');
+    const menuStatMenor = document.querySelector('#menu-stat-menor');
 
     if (statTotal) statTotal.textContent = String(rows.length);
+    if (menuStatTotal) menuStatTotal.textContent = String(rows.length);
     if (statTel) statTel.textContent = String(telCount);
+    if (menuStatTel) menuStatTel.textContent = String(telCount);
     if (statSinTel) statSinTel.textContent = String(sinTelCount);
     if (btnStatSinTel) btnStatSinTel.textContent = String(sinTelCount);
+    if (statSinNombre) statSinNombre.textContent = String(sinNombreCount);
+    if (btnStatSinNombre) btnStatSinNombre.textContent = String(sinNombreCount);
     if (statPas) statPas.textContent = String(pasCount);
+    if (menuStatPas) menuStatPas.textContent = String(pasCount);
+    if (statSinPas) statSinPas.textContent = String(sinPasCount);
+    if (menuStatSinPas) menuStatSinPas.textContent = String(sinPasCount);
     if (statEmail) statEmail.textContent = String(emailCount);
+    if (menuStatEmail) menuStatEmail.textContent = String(emailCount);
+    if (menuStatVip) menuStatVip.textContent = String(vipCount);
+    if (menuStatSecundario) menuStatSecundario.textContent = String(secundarioCount);
+    if (menuStatPapeamento) menuStatPapeamento.textContent = String(papeamentoCount);
+    if (menuStatMenor) menuStatMenor.textContent = String(menorCount);
   }
 
   function openContactoModal(record?: ContactoRecord) {
@@ -729,6 +1068,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       if (fApellidos) fApellidos.value = record.apellidos === '-' ? '' : record.apellidos;
       if (fNacimiento) fNacimiento.value = record.fecha_nacimiento === '-' ? '' : record.fecha_nacimiento;
       if (fGenero) fGenero.value = record.genero || '-';
+      if (fTipoCliente) fTipoCliente.value = record.tipo_cliente || '-';
       if (fPasaporte) fPasaporte.value = record.numero_pasaporte === '-' ? '' : record.numero_pasaporte;
       if (fNacionalidad) fNacionalidad.value = record.nacionalidad_pasaporte === '-' ? '' : record.nacionalidad_pasaporte;
       if (fEmision) fEmision.value = record.fecha_emision_pasaporte === '-' ? '' : record.fecha_emision_pasaporte;
@@ -741,10 +1081,12 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       if (modalTitle) modalTitle.textContent = 'Nuevo Contacto';
       if (modalSubtitle) modalSubtitle.textContent = 'Ingresa los datos para registrar en el directorio de clientes';
       if (fId) fId.value = '';
+      if (fTipoCliente) fTipoCliente.value = '-';
       if (btnDeleteModal) btnDeleteModal.classList.add('hidden');
       if (btnSubmitModal) btnSubmitModal.textContent = 'Crear Contacto';
     }
 
+    updateModalTipoBadgePreview();
     modal.showModal();
     fContacto?.focus();
   }
@@ -767,45 +1109,141 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
     });
   }
 
-  // Clic en fila para abrir modal (excepto botón de WhatsApp)
-  tbody?.addEventListener('click', (event) => {
+  // Clic en fila para abrir modal (excepto enlaces de acción y botón de Eliminar Contacto)
+  tbody?.addEventListener('click', async (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest('[data-whatsapp-link]')) return;
+    if (target.closest('[data-whatsapp-link], [data-pendiente-link], [data-pendiente-hoy-link]')) return;
+
+    const deleteBtn = target.closest<HTMLButtonElement>('[data-delete-contacto]');
+    if (deleteBtn) {
+      event.stopPropagation();
+      const id = Number(deleteBtn.dataset.deleteContacto);
+      const name = deleteBtn.dataset.deleteName || `#${id}`;
+      if (!id) return;
+
+      if (!window.confirm(`¿Estás seguro de eliminar el contacto "${name}" de la base de datos D1?`)) {
+        return;
+      }
+
+      deleteBtn.disabled = true;
+      try {
+        const response = await fetch(`/api/contactos?id=${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${id}"]`);
+          row?.remove();
+          recalculateStats();
+          applyFilters();
+          showSyncToast(`Contacto "${name}" eliminado de D1`);
+        } else {
+          alert('No se pudo eliminar el contacto.');
+        }
+      } catch {
+        alert('Error de conexión al eliminar el contacto.');
+      } finally {
+        deleteBtn.disabled = false;
+      }
+      return;
+    }
+
     const row = target.closest<HTMLTableRowElement>('tr[data-row-id]');
     if (!row || !row.dataset.rowRecord) return;
     const record = JSON.parse(row.dataset.rowRecord) as ContactoRecord;
     openContactoModal(record);
   });
 
-  // Filtros pills
-  document.querySelectorAll<HTMLButtonElement>('[data-filter-pill]').forEach((pill) => {
-    pill.addEventListener('click', () => {
-      const targetFilter = pill.dataset.filterPill || 'ALL';
-      selectedFilter = selectedFilter === targetFilter && targetFilter !== 'ALL' ? 'ALL' : targetFilter;
+  // Delegación global para el menú Hamburguesa, opciones de filtro y botón Limpiar
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const currentPanelFiltros = document.querySelector<HTMLElement>('#panel-filtros-contactos');
+    const currentBtnHamburger = document.querySelector<HTMLButtonElement>('#btn-toggle-hamburger-contactos');
+
+    // 1. Abrir / cerrar Hamburguesa
+    const toggleBtn = target.closest<HTMLButtonElement>('#btn-toggle-hamburger-contactos');
+    if (toggleBtn && currentPanelFiltros) {
+      e.stopPropagation();
+      const willOpen = currentPanelFiltros.classList.contains('hidden');
+      if (willOpen) {
+        currentPanelFiltros.classList.remove('hidden');
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      } else {
+        currentPanelFiltros.classList.add('hidden');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      }
       applyFilters();
-    });
+      return;
+    }
+
+    // 2. Botón X para cerrar Hamburguesa
+    const closeBtn = target.closest<HTMLButtonElement>('#btn-close-hamburger-contactos');
+    if (closeBtn && currentPanelFiltros) {
+      e.stopPropagation();
+      currentPanelFiltros.classList.add('hidden');
+      currentBtnHamburger?.setAttribute('aria-expanded', 'false');
+      applyFilters();
+      return;
+    }
+
+    // 3. Botón Limpiar filtros
+    const resetBtn = target.closest<HTMLButtonElement>('#btn-reset-filtro-contactos');
+    if (resetBtn) {
+      e.stopPropagation();
+      selectedFilter = 'ALL';
+      const currentSearchInput = document.querySelector<HTMLInputElement>('#input-search-contactos');
+      if (currentSearchInput) currentSearchInput.value = '';
+      if (currentPanelFiltros) {
+        currentPanelFiltros.classList.add('hidden');
+        currentBtnHamburger?.setAttribute('aria-expanded', 'false');
+      }
+      applyFilters();
+      const tableWrapper = document.querySelector<HTMLElement>('.table-wrapper');
+      if (tableWrapper) tableWrapper.scrollTop = 0;
+      return;
+    }
+
+    // 4. Selección de cualquier filtro (en la Hamburguesa o en las píldoras superiores)
+    const pill = target.closest<HTMLButtonElement>('[data-filter-pill]');
+    if (pill) {
+      e.stopPropagation();
+      const targetFilter = pill.dataset.filterPill || 'ALL';
+      const isInsideMenu = Boolean(currentPanelFiltros && currentPanelFiltros.contains(pill));
+
+      if (isInsideMenu) {
+        // Al seleccionar desde la lista de filtros, siempre activar directamente ese filtro
+        selectedFilter = targetFilter;
+        currentPanelFiltros?.classList.add('hidden');
+        currentBtnHamburger?.setAttribute('aria-expanded', 'false');
+      } else {
+        // En las píldoras superiores, permitir activar ese filtro (o volver a ALL si ya estaba activo)
+        selectedFilter = selectedFilter === targetFilter && targetFilter !== 'ALL' ? 'ALL' : targetFilter;
+      }
+
+      applyFilters();
+      const tableWrapper = document.querySelector<HTMLElement>('.table-wrapper');
+      if (tableWrapper) tableWrapper.scrollTop = 0;
+      return;
+    }
+
+    // 5. Clic fuera del menú Hamburguesa -> cerrarlo
+    if (
+      currentPanelFiltros &&
+      !currentPanelFiltros.classList.contains('hidden') &&
+      !currentPanelFiltros.contains(target) &&
+      !currentBtnHamburger?.contains(target)
+    ) {
+      currentPanelFiltros.classList.add('hidden');
+      currentBtnHamburger?.setAttribute('aria-expanded', 'false');
+      applyFilters();
+    }
   });
 
-  // Selector desplegable de filtro junto al buscador
-  selectFiltro?.addEventListener('change', () => {
-    selectedFilter = selectFiltro.value || 'ALL';
-    applyFilters();
+  document.addEventListener('input', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.id === 'input-search-contactos') {
+      applyFilters();
+    }
   });
-
-  // Botón rápido "Sin Teléfono" junto al buscador
-  btnToggleSinTel?.addEventListener('click', () => {
-    selectedFilter = selectedFilter === 'SIN_TEL' ? 'ALL' : 'SIN_TEL';
-    applyFilters();
-  });
-
-  // Botón limpiar filtros
-  btnResetFiltro?.addEventListener('click', () => {
-    selectedFilter = 'ALL';
-    if (searchInput) searchInput.value = '';
-    applyFilters();
-  });
-
-  searchInput?.addEventListener('input', applyFilters);
 
   // Eliminar Contacto
   btnDeleteModal?.addEventListener('click', async () => {
@@ -855,6 +1293,7 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       apellidos: fApellidos?.value?.trim() || '-',
       fecha_nacimiento: fNacimiento?.value?.trim() || '-',
       genero: fGenero?.value || '-',
+      tipo_cliente: fTipoCliente?.value || '-',
       numero_pasaporte: fPasaporte?.value?.trim() || '-',
       nacionalidad_pasaporte: fNacionalidad?.value?.trim() || '-',
       fecha_emision_pasaporte: fEmision?.value?.trim() || '-',
@@ -885,15 +1324,19 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
 
         const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${updated.id}"]`);
         if (row) {
+          const updatedTipoCliente = (updated.tipo_cliente || payload.tipo_cliente || '-').trim() || '-';
+          updated.tipo_cliente = updatedTipoCliente;
           row.dataset.rowRecord = JSON.stringify(updated);
           row.dataset.rowContacto = updated.contacto;
           row.dataset.rowTel = updated.telefono;
           row.dataset.rowHasTel = updated.telefono && updated.telefono !== '-' ? '1' : '0';
+          row.dataset.rowSinNombre = isContactoSinNombre(updated) ? '1' : '0';
           row.dataset.rowHasPas = updated.numero_pasaporte && updated.numero_pasaporte !== '-' ? '1' : '0';
           row.dataset.rowHasEmail = updated.email && updated.email !== '-' ? '1' : '0';
+          row.dataset.rowTipoCliente = updatedTipoCliente;
 
           const cellContacto = row.querySelector<HTMLElement>(`[data-cell-contacto="${updated.id}"]`);
-          const cellTelefono = row.querySelector<HTMLElement>(`[data-cell-telefono="${updated.id}"]`);
+          const telSpan = row.querySelector<HTMLElement>(`[data-tel-text-for="${updated.id}"]`);
           const cellEmail = row.querySelector<HTMLElement>(`[data-cell-email="${updated.id}"]`);
           const cellFullname = row.querySelector<HTMLElement>(`[data-cell-fullname="${updated.id}"]`);
           const cellGenero = row.querySelector<HTMLElement>(`[data-cell-genero="${updated.id}"]`);
@@ -901,11 +1344,33 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
           const cellVencimiento = row.querySelector<HTMLElement>(`[data-cell-vencimiento="${updated.id}"]`);
 
           const nameSpan = row.querySelector<HTMLElement>(`[data-name-for="${updated.id}"]`);
+          const tipoBadge = row.querySelector<HTMLElement>(`[data-tipo-badge-for="${updated.id}"]`);
+          const tipoPlaceholder = row.querySelector<HTMLElement>(`[data-tipo-placeholder-for="${updated.id}"]`);
+          const pendienteAnchor = row.querySelector<HTMLAnchorElement>(`[data-pendiente-for="${updated.id}"]`);
+          const hoyAnchor = row.querySelector<HTMLAnchorElement>(`[data-hoy-for="${updated.id}"]`);
           const waAnchor = row.querySelector<HTMLAnchorElement>(`[data-wa-for="${updated.id}"]`);
+          const delBtn = row.querySelector<HTMLButtonElement>(`[data-delete-contacto="${updated.id}"]`);
           if (nameSpan) {
             nameSpan.textContent = updated.contacto;
           } else if (cellContacto) {
             cellContacto.textContent = updated.contacto;
+          }
+          if (tipoBadge) {
+            if (updatedTipoCliente && updatedTipoCliente !== '-') {
+              tipoBadge.textContent = updatedTipoCliente;
+              tipoBadge.className = `inline-flex items-center justify-center rounded-md px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide leading-tight ${getTipoClienteBadgeClass(updatedTipoCliente)}`;
+              if (tipoPlaceholder) tipoPlaceholder.className = 'hidden';
+            } else {
+              tipoBadge.textContent = '';
+              tipoBadge.className = 'hidden';
+              if (tipoPlaceholder) tipoPlaceholder.className = 'text-xs text-primary/40 font-normal';
+            }
+          }
+          if (pendienteAnchor) {
+            pendienteAnchor.href = `/?contacto=${encodeURIComponent(updated.contacto)}`;
+          }
+          if (hoyAnchor) {
+            hoyAnchor.href = `/pendientes-hoy?contacto=${encodeURIComponent(updated.contacto)}`;
           }
           if (waAnchor) {
             const newWa = buildWhatsAppDynamicLink(updated.contacto, updated.telefono);
@@ -913,8 +1378,13 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
             waAnchor.title = newWa.label;
             waAnchor.setAttribute('aria-label', newWa.label);
           }
-          if (cellTelefono) {
-            cellTelefono.innerHTML =
+          if (delBtn) {
+            delBtn.dataset.deleteName = updated.contacto;
+            delBtn.title = `Eliminar contacto de ${updated.contacto}`;
+            delBtn.setAttribute('aria-label', `Eliminar contacto de ${updated.contacto}`);
+          }
+          if (telSpan) {
+            telSpan.innerHTML =
               updated.telefono !== '-'
                 ? `<span class="text-primary font-mono">${updated.telefono}</span>`
                 : `<span class="text-primary/40 font-normal">-</span>`;
@@ -960,4 +1430,41 @@ const conEmail = contactos.filter((c) => c.email && c.email !== '-').length;
       btnSubmitModal.textContent = 'Guardar Cambios';
     }
   });
+
+  // Sincronizar en el navegador los iconos de "Pendientes de Hoy" usando la fecha local exacta
+  function syncPendientesHoyIconsClient() {
+    if (!tbody) return;
+    const now = new Date();
+    const refDate = createMidnightDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'));
+
+    for (const row of rows) {
+      const id = row.dataset.rowId;
+      const rawPendientes = row.dataset.rowPendientes;
+      const hoyAnchor = row.querySelector<HTMLAnchorElement>(`[data-hoy-for="${id}"]`);
+      if (!hoyAnchor) continue;
+      if (!rawPendientes) {
+        hoyAnchor.classList.add('hidden');
+        hoyAnchor.classList.remove('inline-flex');
+        continue;
+      }
+      try {
+        const list = JSON.parse(rawPendientes) as PendienteRecord[];
+        const matches = list
+          .map((p) => evaluatePendienteForHoy(p, refDate))
+          .filter((ev) => ev.matches);
+        if (matches.length > 0) {
+          const labels = matches.map((m) => m.matchLabel).join(' | ');
+          hoyAnchor.title = `Pendiente para HOY (${labels}) — Ir a Pendientes Hoy`;
+          hoyAnchor.classList.remove('hidden');
+          hoyAnchor.classList.add('inline-flex');
+        } else {
+          hoyAnchor.classList.add('hidden');
+          hoyAnchor.classList.remove('inline-flex');
+        }
+      } catch {}
+    }
+  }
+
+  syncPendientesHoyIconsClient();
 </script>

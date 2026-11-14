@@ -1,0 +1,768 @@
+---
+import type { NotaRecord } from '@/types';
+
+interface Props {
+  notas: NotaRecord[];
+}
+
+const { notas = [] } = Astro.props;
+const totalNotas = notas.length;
+const totalListas = notas.filter((n) => n.completada).length;
+const totalPendientes = totalNotas - totalListas;
+---
+
+<section class="flex-1 min-h-0 flex flex-col w-full max-w-[1440px] lg:w-[92%] xl:w-[88%] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3">
+  <!-- Barra superior: Agregar nota rápida + Buscador + Hamburguesa de Filtros -->
+  <div class="shrink-0 relative z-30 bg-base rounded-xl border border-base-border p-3.5 shadow-xs space-y-2.5">
+    <!-- Formulario rápido para agregar nueva nota al checklist -->
+    <form id="form-quick-nota" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+      <div class="relative flex-1">
+        <input
+          type="text"
+          id="input-quick-nota"
+          placeholder="Escribe una nota nueva para el check list..."
+          required
+          class="w-full rounded-lg border border-base-border bg-base-muted px-4 py-2.5 text-sm font-medium text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+      <button
+        type="submit"
+        id="btn-add-quick-nota"
+        class="rounded-lg bg-primary hover:bg-primary-light active:bg-primary-dark text-base font-bold px-4 py-2.5 text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+      >
+        <span>+</span>
+        <span>Nueva Nota</span>
+      </button>
+    </form>
+
+    <!-- Buscador, contador y menú Hamburguesa de filtros -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-base-border">
+      <div class="relative flex-1 max-w-md">
+        <input
+          type="search"
+          id="input-search-notas"
+          placeholder="Buscar en notas..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-1.5 text-xs text-primary placeholder:text-primary/50 focus:border-primary focus:bg-base focus:outline-none"
+        />
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5 text-xs font-semibold text-primary">
+        <span id="notas-visible-counter">
+          Mostrando <strong>{totalNotas}</strong> de <strong>{totalNotas}</strong>
+        </span>
+        <span
+          id="notas-sync-toast"
+          class="hidden rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 text-xs font-bold transition"
+        >
+          Guardado
+        </span>
+
+        <!-- Botón Hamburguesa de Filtros de Notas -->
+        <div class="relative ml-auto sm:ml-0">
+          <button
+            type="button"
+            id="btn-toggle-filtros-notas"
+            aria-expanded="false"
+            title="Filtrar notas por estado"
+            class="rounded-lg border-2 border-primary/30 bg-base-muted hover:border-primary hover:bg-primary hover:text-base text-primary font-extrabold px-3.5 py-1.5 text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+          >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span>Filtros</span>
+            <span
+              id="badge-filtros-notas"
+              class="hidden items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+            >
+              1
+            </span>
+          </button>
+
+          <div
+            id="panel-filtros-notas"
+            class="hidden absolute right-0 top-full mt-2 z-50 w-64 sm:w-72 bg-base rounded-xl border-2 border-primary/25 p-3 shadow-xl transition-all"
+          >
+            <div class="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-base-border">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-primary">
+                🔎 Filtrar Notas
+              </span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="btn-clear-filtros-notas"
+                  class="rounded-lg border border-sky-300 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-2.5 py-1 text-xs transition cursor-pointer"
+                >
+                  Limpiar
+                </button>
+                <button
+                  type="button"
+                  id="btn-close-filtros-notas"
+                  class="rounded-lg border border-base-border bg-base-muted hover:bg-base text-primary/80 font-extrabold px-2.5 py-1 text-xs leading-none transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <button
+                type="button"
+                data-nota-filter="ALL"
+                class="w-full rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+              >
+                <span>📋 Todas las notas</span>
+                <span id="stat-notas-total" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-primary">{totalNotas}</span>
+              </button>
+              <button
+                type="button"
+                data-nota-filter="PENDIENTES"
+                class="w-full rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+              >
+                <span>⏳ Pendientes</span>
+                <span id="stat-notas-pendientes" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-amber-800">{totalPendientes}</span>
+              </button>
+              <button
+                type="button"
+                data-nota-filter="LISTAS"
+                class="w-full rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between gap-2 text-left"
+              >
+                <span>✅ Listas (Completadas)</span>
+                <span id="stat-notas-listas" class="rounded bg-white/90 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800">{totalListas}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla / Checklist de Notas -->
+  <div class="flex-1 min-h-0 flex flex-col bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+    <div class="table-wrapper">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-primary text-base text-xs uppercase tracking-wider sticky top-0 z-20">
+          <tr>
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary w-14 text-center">
+              Listo
+            </th>
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary">
+              Nota / Check List
+            </th>
+            <th scope="col" class="py-3 px-4 font-bold border-b-2 border-secondary w-36 text-right">
+              Acciones
+            </th>
+          </tr>
+        </thead>
+        <tbody id="notas-tbody" class="divide-y divide-base-border">
+          {
+            notas.map((n) => (
+              <tr
+                data-nota-id={n.id}
+                data-nota-completada={n.completada ? '1' : '0'}
+                data-nota-record={JSON.stringify(n)}
+                class={`transition-colors ${n.completada ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'hover:bg-base-muted'}`}
+              >
+                <td class="py-3 px-4 align-middle text-center border-r border-base-border">
+                  <button
+                    type="button"
+                    data-toggle-check={n.id}
+                    title={n.completada ? 'Desmarcar como listo' : 'Marcar como listo'}
+                    aria-label={n.completada ? 'Desmarcar como listo' : 'Marcar como listo'}
+                    class={`inline-flex items-center justify-center h-6 w-6 rounded-md border-2 transition cursor-pointer ${
+                      n.completada
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                        : 'bg-base border-primary/40 hover:border-emerald-600 text-transparent'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                </td>
+
+                <td
+                  data-edit-nota={n.id}
+                  class="py-3 px-4 align-middle cursor-pointer"
+                >
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span
+                      data-nota-text-for={n.id}
+                      class={`text-sm font-semibold leading-snug break-words ${
+                        n.completada ? 'line-through text-primary/50' : 'text-primary'
+                      }`}
+                    >
+                      {n.texto}
+                    </span>
+                    <span
+                      data-nota-badge-for={n.id}
+                      class={
+                        n.completada
+                          ? 'inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 px-2.5 py-0.5 text-[11px] font-extrabold shrink-0'
+                          : 'hidden'
+                      }
+                    >
+                      ✓ Listo
+                    </span>
+                  </div>
+                </td>
+
+                <td class="py-3 px-4 align-middle text-right whitespace-nowrap">
+                  <div class="inline-flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      data-edit-nota={n.id}
+                      title="Editar nota"
+                      aria-label="Editar nota"
+                      class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-base shadow-xs transition cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-delete-nota={n.id}
+                      title="Eliminar nota"
+                      aria-label="Eliminar nota"
+                      class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary hover:bg-secondary hover:text-base shadow-xs transition cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          }
+          <tr id="notas-empty-row" class={notas.length === 0 ? '' : 'hidden'}>
+            <td colspan="3" class="py-10 px-4 text-center text-sm font-semibold text-primary/65">
+              No hay notas registradas en el check list. Agrega una nueva nota arriba.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Modal para Editar Nota -->
+<dialog
+  id="modal-nota"
+  {...({ closedby: 'any' } as any)}
+  class="m-auto rounded-2xl bg-base p-0 shadow-2xl backdrop:bg-primary-dark/60 backdrop:backdrop-blur-xs max-w-lg w-[94vw] border-2 border-primary overflow-hidden"
+  aria-labelledby="modal-nota-title"
+>
+  <form id="form-modal-nota" method="dialog" class="flex flex-col overflow-hidden">
+    <div class="shrink-0 flex items-center justify-between bg-primary px-6 py-3.5 text-base border-b-4 border-secondary">
+      <h3 id="modal-nota-title" class="text-base font-extrabold tracking-tight">
+        Editar Nota
+      </h3>
+      <button
+        type="button"
+        id="btn-close-modal-nota"
+        class="rounded-lg bg-base/10 hover:bg-base/20 px-2.5 py-1 text-xs font-bold transition cursor-pointer"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="p-6 space-y-4 text-sm">
+      <input type="hidden" id="field-nota-id" value="" />
+      <div>
+        <label for="field-nota-texto" class="block text-xs font-bold uppercase text-primary mb-1.5">
+          Descripción de la Nota
+        </label>
+        <textarea
+          id="field-nota-texto"
+          rows="3"
+          required
+          placeholder="Escribe el contenido de la nota..."
+          class="w-full rounded-lg border border-base-border bg-base-muted px-3.5 py-2.5 text-primary font-semibold focus:border-primary focus:bg-base focus:outline-none"
+        ></textarea>
+      </div>
+
+      <label class="inline-flex items-center gap-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          id="field-nota-completada"
+          class="h-4 w-4 rounded border-base-border accent-emerald-600 cursor-pointer"
+        />
+        <span class="text-xs font-bold text-primary">Marcar como Listo (Completada)</span>
+      </label>
+    </div>
+
+    <div class="shrink-0 flex items-center justify-end gap-2.5 bg-base-muted px-6 py-3.5 border-t border-base-border">
+      <button
+        type="button"
+        id="btn-cancel-modal-nota"
+        class="rounded-lg border border-base-border bg-base px-4 py-2 text-xs font-semibold text-primary hover:bg-base-muted transition cursor-pointer"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        id="btn-submit-modal-nota"
+        class="rounded-lg bg-primary hover:bg-primary-light text-base font-extrabold px-5 py-2 text-xs shadow-xs transition cursor-pointer"
+      >
+        Guardar Cambios
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  import type { NotaRecord } from '@/types';
+
+  const LOCAL_STORAGE_KEY = 'gtcw_notas_checklist_v1';
+
+  const tbody = document.querySelector<HTMLTableSectionElement>('#notas-tbody');
+  const emptyRow = document.querySelector<HTMLTableRowElement>('#notas-empty-row');
+  const formQuick = document.querySelector<HTMLFormElement>('#form-quick-nota');
+  const inputQuick = document.querySelector<HTMLInputElement>('#input-quick-nota');
+  const btnAddQuick = document.querySelector<HTMLButtonElement>('#btn-add-quick-nota');
+  const searchInput = document.querySelector<HTMLInputElement>('#input-search-notas');
+  const visibleCounter = document.querySelector<HTMLElement>('#notas-visible-counter');
+  const syncToast = document.querySelector<HTMLElement>('#notas-sync-toast');
+
+  const btnToggleFiltros = document.querySelector<HTMLButtonElement>('#btn-toggle-filtros-notas');
+  const badgeFiltros = document.querySelector<HTMLElement>('#badge-filtros-notas');
+  const panelFiltros = document.querySelector<HTMLElement>('#panel-filtros-notas');
+  const btnClearFiltros = document.querySelector<HTMLButtonElement>('#btn-clear-filtros-notas');
+  const btnCloseFiltros = document.querySelector<HTMLButtonElement>('#btn-close-filtros-notas');
+
+  const statTotal = document.querySelector<HTMLElement>('#stat-notas-total');
+  const statPendientes = document.querySelector<HTMLElement>('#stat-notas-pendientes');
+  const statListas = document.querySelector<HTMLElement>('#stat-notas-listas');
+
+  const modal = document.querySelector<HTMLDialogElement>('#modal-nota');
+  const formModal = document.querySelector<HTMLFormElement>('#form-modal-nota');
+  const fId = document.querySelector<HTMLInputElement>('#field-nota-id');
+  const fTexto = document.querySelector<HTMLTextAreaElement>('#field-nota-texto');
+  const fCompletada = document.querySelector<HTMLInputElement>('#field-nota-completada');
+  const btnCloseModal = document.querySelector<HTMLButtonElement>('#btn-close-modal-nota');
+  const btnCancelModal = document.querySelector<HTMLButtonElement>('#btn-cancel-modal-nota');
+  const btnSubmitModal = document.querySelector<HTMLButtonElement>('#btn-submit-modal-nota');
+
+  let selectedFilter: 'ALL' | 'PENDIENTES' | 'LISTAS' = 'ALL';
+
+  function showToast(msg: string) {
+    if (!syncToast) return;
+    syncToast.textContent = msg;
+    syncToast.classList.remove('hidden');
+    window.setTimeout(() => {
+      syncToast.classList.add('hidden');
+    }, 2400);
+  }
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function buildNotaRowHtml(n: NotaRecord): string {
+    const safeText = escapeHtml(n.texto);
+    return `
+      <td class="py-3 px-4 align-middle text-center border-r border-base-border">
+        <button
+          type="button"
+          data-toggle-check="${n.id}"
+          title="${n.completada ? 'Desmarcar como listo' : 'Marcar como listo'}"
+          aria-label="${n.completada ? 'Desmarcar como listo' : 'Marcar como listo'}"
+          class="inline-flex items-center justify-center h-6 w-6 rounded-md border-2 transition cursor-pointer ${
+            n.completada
+              ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+              : 'bg-base border-primary/40 hover:border-emerald-600 text-transparent'
+          }"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
+      </td>
+      <td data-edit-nota="${n.id}" class="py-3 px-4 align-middle cursor-pointer">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span
+            data-nota-text-for="${n.id}"
+            class="text-sm font-semibold leading-snug break-words ${
+              n.completada ? 'line-through text-primary/50' : 'text-primary'
+            }"
+          >${safeText}</span>
+          <span
+            data-nota-badge-for="${n.id}"
+            class="${
+              n.completada
+                ? 'inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 px-2.5 py-0.5 text-[11px] font-extrabold shrink-0'
+                : 'hidden'
+            }"
+          >✓ Listo</span>
+        </div>
+      </td>
+      <td class="py-3 px-4 align-middle text-right whitespace-nowrap">
+        <div class="inline-flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            data-edit-nota="${n.id}"
+            title="Editar nota"
+            aria-label="Editar nota"
+            class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-base shadow-xs transition cursor-pointer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            data-delete-nota="${n.id}"
+            title="Eliminar nota"
+            aria-label="Eliminar nota"
+            class="inline-flex items-center justify-center shrink-0 h-8 w-8 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary hover:bg-secondary hover:text-base shadow-xs transition cursor-pointer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        </div>
+      </td>
+    `;
+  }
+
+  function getRows(): HTMLTableRowElement[] {
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[data-nota-id]'));
+  }
+
+  function saveLocalBackup() {
+    try {
+      const records = getRows()
+        .map((r) => {
+          try {
+            return JSON.parse(r.dataset.notaRecord || '') as NotaRecord;
+          } catch {
+            return null;
+          }
+        })
+        .filter((x): x is NotaRecord => Boolean(x));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(records));
+    } catch {}
+  }
+
+  function restoreLocalBackupIfNeeded() {
+    if (!tbody) return;
+    if (getRows().length > 0) {
+      saveLocalBackup();
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as NotaRecord[];
+      if (!Array.isArray(saved) || saved.length === 0) return;
+      for (const n of saved) {
+        insertOrUpdateRowInDom(n, false);
+      }
+      applyFilters();
+    } catch {}
+  }
+
+  function insertOrUpdateRowInDom(nota: NotaRecord, prepend = true) {
+    if (!tbody) return;
+    let row = tbody.querySelector<HTMLTableRowElement>(`tr[data-nota-id="${nota.id}"]`);
+    if (!row) {
+      row = document.createElement('tr');
+      row.dataset.notaId = String(nota.id);
+      if (prepend && tbody.firstChild) {
+        tbody.insertBefore(row, tbody.firstChild);
+      } else if (emptyRow && emptyRow.parentNode === tbody) {
+        tbody.insertBefore(row, emptyRow);
+      } else {
+        tbody.appendChild(row);
+      }
+    }
+    row.dataset.notaCompletada = nota.completada ? '1' : '0';
+    row.dataset.notaRecord = JSON.stringify(nota);
+    row.className = `transition-colors ${
+      nota.completada ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'hover:bg-base-muted'
+    }`;
+    row.innerHTML = buildNotaRowHtml(nota);
+  }
+
+  function applyFilters() {
+    const rows = getRows();
+    const q = (searchInput?.value || '').trim().toLowerCase();
+
+    let total = rows.length;
+    let listas = 0;
+    let pendientes = 0;
+    let visible = 0;
+
+    for (const row of rows) {
+      const isComp = row.dataset.notaCompletada === '1';
+      if (isComp) listas++;
+      else pendientes++;
+
+      let rec: NotaRecord | null = null;
+      try {
+        rec = JSON.parse(row.dataset.notaRecord || '') as NotaRecord;
+      } catch {}
+      const text = (rec?.texto || '').toLowerCase();
+
+      const matchesFilter =
+        selectedFilter === 'ALL' ||
+        (selectedFilter === 'PENDIENTES' && !isComp) ||
+        (selectedFilter === 'LISTAS' && isComp);
+      const matchesQuery = !q || text.includes(q);
+
+      if (matchesFilter && matchesQuery) {
+        row.style.display = '';
+        visible++;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    if (statTotal) statTotal.textContent = String(total);
+    if (statPendientes) statPendientes.textContent = String(pendientes);
+    if (statListas) statListas.textContent = String(listas);
+
+    if (visibleCounter) {
+      visibleCounter.innerHTML = `Mostrando <strong>${visible}</strong> de <strong>${total}</strong>`;
+    }
+
+    if (emptyRow) {
+      if (visible === 0) {
+        emptyRow.classList.remove('hidden');
+      } else {
+        emptyRow.classList.add('hidden');
+      }
+    }
+
+    const isFilterActive = selectedFilter !== 'ALL';
+    if (badgeFiltros) {
+      badgeFiltros.classList.toggle('hidden', !isFilterActive);
+      badgeFiltros.classList.toggle('inline-flex', isFilterActive);
+    }
+
+    if (btnToggleFiltros) {
+      const isMenuOpen = panelFiltros && !panelFiltros.classList.contains('hidden');
+      if (isFilterActive || isMenuOpen) {
+        btnToggleFiltros.classList.remove('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleFiltros.classList.add('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      } else {
+        btnToggleFiltros.classList.add('bg-base-muted', 'text-primary', 'border-primary/30');
+        btnToggleFiltros.classList.remove('bg-primary', 'text-base', 'border-primary', 'ring-2', 'ring-primary/25');
+      }
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-nota-filter]').forEach((btn) => {
+      if (btn.dataset.notaFilter === selectedFilter) {
+        btn.classList.add('ring-2', 'ring-primary');
+      } else {
+        btn.classList.remove('ring-2', 'ring-primary');
+      }
+    });
+  }
+
+  // Crear nueva nota desde la barra superior
+  formQuick?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const texto = (inputQuick?.value || '').trim();
+    if (!texto || !btnAddQuick) return;
+
+    btnAddQuick.disabled = true;
+    try {
+      const response = await fetch('/api/notas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto, completada: false }),
+      });
+      const result = (await response.json()) as { ok?: boolean; data?: NotaRecord };
+      const created: NotaRecord =
+        response.ok && result.ok && result.data
+          ? result.data
+          : { id: Date.now(), texto, completada: false };
+
+      insertOrUpdateRowInDom(created, true);
+      saveLocalBackup();
+      if (inputQuick) inputQuick.value = '';
+      applyFilters();
+      showToast('Nota agregada');
+    } catch {
+      const fallback: NotaRecord = { id: Date.now(), texto, completada: false };
+      insertOrUpdateRowInDom(fallback, true);
+      saveLocalBackup();
+      if (inputQuick) inputQuick.value = '';
+      applyFilters();
+      showToast('Nota agregada');
+    } finally {
+      btnAddQuick.disabled = false;
+    }
+  });
+
+  // Delegación de eventos en la tabla: Check de Listo, Editar y Eliminar
+  tbody?.addEventListener('click', async (e) => {
+    const target = e.target as HTMLElement;
+
+    // 1. Toggle Check de Listo
+    const checkBtn = target.closest<HTMLButtonElement>('[data-toggle-check]');
+    if (checkBtn) {
+      e.stopPropagation();
+      const id = Number(checkBtn.dataset.toggleCheck);
+      const row = tbody.querySelector<HTMLTableRowElement>(`tr[data-nota-id="${id}"]`);
+      if (!row) return;
+      let rec: NotaRecord | null = null;
+      try {
+        rec = JSON.parse(row.dataset.notaRecord || '') as NotaRecord;
+      } catch {}
+      if (!rec) return;
+
+      const newComp = !rec.completada;
+      const optimistic: NotaRecord = { ...rec, completada: newComp };
+      insertOrUpdateRowInDom(optimistic, false);
+      saveLocalBackup();
+      applyFilters();
+
+      try {
+        await fetch('/api/notas', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, completada: newComp }),
+        });
+      } catch {}
+      showToast(newComp ? 'Marcada como Listo ✓' : 'Marcada como pendiente');
+      return;
+    }
+
+    // 2. Eliminar Nota
+    const delBtn = target.closest<HTMLButtonElement>('[data-delete-nota]');
+    if (delBtn) {
+      e.stopPropagation();
+      const id = Number(delBtn.dataset.deleteNota);
+      const row = tbody.querySelector<HTMLTableRowElement>(`tr[data-nota-id="${id}"]`);
+      if (!row) return;
+      if (!window.confirm('¿Estás seguro de eliminar esta nota del check list?')) {
+        return;
+      }
+      row.remove();
+      saveLocalBackup();
+      applyFilters();
+      try {
+        await fetch(`/api/notas?id=${id}`, { method: 'DELETE' });
+      } catch {}
+      showToast('Nota eliminada');
+      return;
+    }
+
+    // 3. Editar Nota
+    const editTrigger = target.closest<HTMLElement>('[data-edit-nota]');
+    if (editTrigger && modal) {
+      const id = Number(editTrigger.dataset.editNota);
+      const row = tbody.querySelector<HTMLTableRowElement>(`tr[data-nota-id="${id}"]`);
+      if (!row) return;
+      let rec: NotaRecord | null = null;
+      try {
+        rec = JSON.parse(row.dataset.notaRecord || '') as NotaRecord;
+      } catch {}
+      if (!rec) return;
+
+      if (fId) fId.value = String(rec.id);
+      if (fTexto) fTexto.value = rec.texto;
+      if (fCompletada) fCompletada.checked = Boolean(rec.completada);
+      modal.showModal();
+      fTexto?.focus();
+    }
+  });
+
+  // Guardar edición desde el modal
+  formModal?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = Number(fId?.value);
+    const texto = (fTexto?.value || '').trim();
+    const completada = Boolean(fCompletada?.checked);
+    if (!id || !texto || !btnSubmitModal) return;
+
+    btnSubmitModal.disabled = true;
+    const updatedLocal: NotaRecord = { id, texto, completada };
+    insertOrUpdateRowInDom(updatedLocal, false);
+    saveLocalBackup();
+    applyFilters();
+    modal?.close();
+
+    try {
+      await fetch('/api/notas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, texto, completada }),
+      });
+    } catch {}
+    btnSubmitModal.disabled = false;
+    showToast('Nota actualizada');
+  });
+
+  btnCloseModal?.addEventListener('click', () => modal?.close());
+  btnCancelModal?.addEventListener('click', () => modal?.close());
+
+  // Buscador y Hamburguesa de filtros
+  searchInput?.addEventListener('input', applyFilters);
+
+  btnToggleFiltros?.addEventListener('click', () => {
+    if (!panelFiltros) return;
+    const willOpen = panelFiltros.classList.contains('hidden');
+    panelFiltros.classList.toggle('hidden', !willOpen);
+    btnToggleFiltros.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    applyFilters();
+  });
+
+  btnClearFiltros?.addEventListener('click', () => {
+    selectedFilter = 'ALL';
+    if (searchInput) searchInput.value = '';
+    panelFiltros?.classList.add('hidden');
+    btnToggleFiltros?.setAttribute('aria-expanded', 'false');
+    applyFilters();
+  });
+
+  btnCloseFiltros?.addEventListener('click', () => {
+    panelFiltros?.classList.add('hidden');
+    btnToggleFiltros?.setAttribute('aria-expanded', 'false');
+    applyFilters();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-nota-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetFilter = (btn.dataset.notaFilter || 'ALL') as 'ALL' | 'PENDIENTES' | 'LISTAS';
+      selectedFilter = targetFilter;
+      panelFiltros?.classList.add('hidden');
+      btnToggleFiltros?.setAttribute('aria-expanded', 'false');
+      applyFilters();
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (
+      panelFiltros &&
+      !panelFiltros.classList.contains('hidden') &&
+      !panelFiltros.contains(e.target as Node) &&
+      !btnToggleFiltros?.contains(e.target as Node)
+    ) {
+      panelFiltros.classList.add('hidden');
+      btnToggleFiltros?.setAttribute('aria-expanded', 'false');
+      applyFilters();
+    }
+  });
+
+  restoreLocalBackupIfNeeded();
+  applyFilters();
+</script>

@@ -10,8 +10,10 @@ import type {
   EstatusRecord,
   NewContactoRecord,
   NewEstatusRecord,
+  NewNotaRecord,
   NewPagoRecord,
   NewPendienteRecord,
+  NotaRecord,
   PagoRecord,
   PagoStatus,
   PendienteRecord,
@@ -20,6 +22,7 @@ import type {
 import {
   getNowFormatted,
   isPagoOverdue20Days,
+  normalizePhoneForWhatsApp,
   parseContactoInitial,
 } from '@/utils/pagoHelpers';
 
@@ -608,6 +611,7 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
           numero_pasaporte TEXT NOT NULL DEFAULT '-',
           nacionalidad_pasaporte TEXT NOT NULL DEFAULT '-',
           genero TEXT NOT NULL DEFAULT '-',
+          tipo_cliente TEXT NOT NULL DEFAULT '-',
           fecha_emision_pasaporte TEXT NOT NULL DEFAULT '-',
           fecha_vencimiento_pasaporte TEXT NOT NULL DEFAULT '-',
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -626,6 +630,7 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
       "ALTER TABLE contactos ADD COLUMN numero_pasaporte TEXT NOT NULL DEFAULT '-'",
       "ALTER TABLE contactos ADD COLUMN nacionalidad_pasaporte TEXT NOT NULL DEFAULT '-'",
       "ALTER TABLE contactos ADD COLUMN genero TEXT NOT NULL DEFAULT '-'",
+      "ALTER TABLE contactos ADD COLUMN tipo_cliente TEXT NOT NULL DEFAULT '-'",
       "ALTER TABLE contactos ADD COLUMN fecha_emision_pasaporte TEXT NOT NULL DEFAULT '-'",
       "ALTER TABLE contactos ADD COLUMN fecha_vencimiento_pasaporte TEXT NOT NULL DEFAULT '-'",
       "ALTER TABLE contactos ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))",
@@ -682,7 +687,20 @@ async function runDatabaseInitialization(db: D1Database): Promise<void> {
       } catch {}
     }
 
-    // 8. Ejecutar migración única de la data local (Oct 30) hacia D1 remoto
+    // 8. Tabla Notas (Checklist operativo)
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS notas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          texto TEXT NOT NULL,
+          completada INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`
+      )
+      .run();
+
+    // 9. Ejecutar migración única de la data local (Oct 30) hacia D1 remoto
     await applyLocalDataMigrationToD1(db);
   } catch (error) {
     console.error('Error inicializando base de datos D1:', error);
@@ -873,7 +891,116 @@ export async function getAllPendientes(db: D1Database): Promise<PendienteRecord[
        ORDER BY p.id ASC`
     )
     .all<PendienteRecord>();
-  return results ?? [];
+  const pendientesList = results ?? [];
+
+  // Reconciliar pendientes cuyos contactos hayan sido editados en el directorio de Contactos
+  try {
+    const contactosRes = await db.prepare('SELECT * FROM contactos').all<ContactoRecord>();
+    const contactos = contactosRes.results ?? [];
+    if (contactos.length > 0 && pendientesList.length > 0) {
+      const norm = (s: string | null | undefined) =>
+        (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const isPhoneOnly = (s: string | null | undefined) =>
+        /^[\d\s\+\-\(\)\.]+$/.test((s || '').trim());
+
+      // Si algún contacto tenía solo teléfono como identificador principal pero ya tiene Nombres/Apellidos, actualizar su identificador
+      for (const c of contactos) {
+        if (isPhoneOnly(c.contacto)) {
+          const fn = [
+            c.nombres && c.nombres !== '-' ? c.nombres.trim() : '',
+            c.apellidos && c.apellidos !== '-' ? c.apellidos.trim() : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+          if (fn) {
+            const oldPhone = c.contacto.trim();
+            const newTel = c.telefono && c.telefono !== '-' ? c.telefono : oldPhone;
+            try {
+              await db
+                .prepare("UPDATE contactos SET contacto = ?, telefono = ?, updated_at = datetime('now') WHERE id = ?")
+                .bind(fn, newTel, c.id)
+                .run();
+              c.contacto = fn;
+              c.telefono = newTel;
+            } catch {}
+          }
+        }
+      }
+
+      for (const p of pendientesList) {
+        const pNorm = norm(p.contacto);
+        const pPhone = normalizePhoneForWhatsApp(p.contacto);
+
+        // Si ya coincide exactamente con el nombre actual de un contacto (y no es solo teléfono), continuar
+        const exactContact = contactos.find((c) => norm(c.contacto) === pNorm);
+        if (exactContact && !isPhoneOnly(exactContact.contacto)) {
+          if (p.contacto !== exactContact.contacto) {
+            p.contacto = exactContact.contacto;
+          }
+          continue;
+        }
+
+        // Buscar contacto asociado por teléfono o por nombre completo (nombres + apellidos)
+        const matchedContact = contactos.find((c) => {
+          const fullName = [
+            c.nombres && c.nombres !== '-' ? c.nombres.trim() : '',
+            c.apellidos && c.apellidos !== '-' ? c.apellidos.trim() : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+          if (fullName && norm(fullName) === pNorm) return true;
+
+          if (pPhone.length >= 7) {
+            const cPhone = normalizePhoneForWhatsApp(c.telefono);
+            const cNamePhone = normalizePhoneForWhatsApp(c.contacto);
+            if (cPhone === pPhone || cNamePhone === pPhone) return true;
+          }
+          return false;
+        });
+
+        if (matchedContact) {
+          const targetName = !isPhoneOnly(matchedContact.contacto)
+            ? matchedContact.contacto.trim()
+            : [
+                matchedContact.nombres && matchedContact.nombres !== '-'
+                  ? matchedContact.nombres.trim()
+                  : '',
+                matchedContact.apellidos && matchedContact.apellidos !== '-'
+                  ? matchedContact.apellidos.trim()
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+
+          if (targetName && targetName !== p.contacto) {
+            const targetApellidos =
+              matchedContact.apellidos &&
+              matchedContact.apellidos !== '-' &&
+              (!p.apellidos || p.apellidos === '-')
+                ? matchedContact.apellidos.trim()
+                : p.apellidos || '-';
+            try {
+              await db
+                .prepare("UPDATE pendientes SET contacto = ?, apellidos = ?, updated_at = datetime('now') WHERE id = ?")
+                .bind(targetName, targetApellidos, p.id)
+                .run();
+              await db
+                .prepare("UPDATE pagos SET contacto = ?, updated_at = datetime('now') WHERE pendiente_id = ?")
+                .bind(targetName, p.id)
+                .run();
+              p.contacto = targetName;
+              p.apellidos = targetApellidos;
+            } catch {}
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return pendientesList;
 }
 
 export async function createPendiente(
@@ -1519,29 +1646,54 @@ export async function deletePago(db: D1Database, id: number): Promise<boolean> {
 // OPERACIONES CRUD: TABLA CONTACTOS
 // ==========================================
 
+function packGeneroWithTipoCliente(genero?: string, tipoCliente?: string): string {
+  const baseGen = (genero || '-').split('::')[0].trim() || '-';
+  const tc = (tipoCliente || '-').trim();
+  if (tc && tc !== '-') {
+    return `${baseGen}::${tc}`;
+  }
+  return baseGen;
+}
+
+function normalizeContactoRecord(c: ContactoRecord): ContactoRecord {
+  const rawGen = (c.genero || '-').trim();
+  if (rawGen.includes('::')) {
+    const [genPart, tipoPart] = rawGen.split('::');
+    const cleanGen = (genPart || '-').trim() || '-';
+    const cleanTipo =
+      (c.tipo_cliente && c.tipo_cliente !== '-' ? c.tipo_cliente : tipoPart || '-').trim() || '-';
+    return { ...c, genero: cleanGen, tipo_cliente: cleanTipo };
+  }
+  return {
+    ...c,
+    genero: rawGen || '-',
+    tipo_cliente: (c.tipo_cliente || '-').trim() || '-',
+  };
+}
+
 export async function getAllContactos(db: D1Database): Promise<ContactoRecord[]> {
   if (isLocalDevEnvironment()) {
     const res = await remoteApiFetch<ContactoRecord[]>('/api/contactos');
-    return res.data ?? [];
+    return (res.data ?? []).map(normalizeContactoRecord);
   }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos ORDER BY contacto COLLATE NOCASE ASC')
     .all<ContactoRecord>();
-  return result.results || [];
+  return (result.results || []).map(normalizeContactoRecord);
 }
 
 export async function getContactoById(db: D1Database, id: number): Promise<ContactoRecord | null> {
   if (isLocalDevEnvironment()) {
     const res = await remoteApiFetch<ContactoRecord>(`/api/contactos?id=${id}`);
-    return res.data ?? null;
+    return res.data ? normalizeContactoRecord(res.data) : null;
   }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos WHERE id = ?')
     .bind(id)
     .first<ContactoRecord>();
-  return result ?? null;
+  return result ? normalizeContactoRecord(result) : null;
 }
 
 export async function getContactoByName(
@@ -1555,14 +1707,14 @@ export async function getContactoByName(
     const res = await remoteApiFetch<ContactoRecord>(
       `/api/contactos?check=${encodeURIComponent(cleanName)}`
     );
-    return res.data ?? null;
+    return res.data ? normalizeContactoRecord(res.data) : null;
   }
   await ensureDatabaseInitialized(db);
   const result = await db
     .prepare('SELECT * FROM contactos WHERE LOWER(TRIM(contacto)) = LOWER(TRIM(?)) LIMIT 1')
     .bind(cleanName)
     .first<ContactoRecord>();
-  if (result) return result;
+  if (result) return normalizeContactoRecord(result);
 
   // Fallback Unicode case-insensitive search (ej. tildes o Ñ que LOWER() de SQLite no convierte)
   const all = await db.prepare('SELECT * FROM contactos').all<ContactoRecord>();
@@ -1570,7 +1722,7 @@ export async function getContactoByName(
   const match = (all.results || []).find(
     (c) => (c.contacto || '').trim().toLowerCase() === targetLower
   );
-  return match ?? null;
+  return match ? normalizeContactoRecord(match) : null;
 }
 
 export async function createContacto(
@@ -1578,12 +1730,17 @@ export async function createContacto(
   data: NewContactoRecord
 ): Promise<ContactoRecord | null> {
   if (isLocalDevEnvironment()) {
+    const packedPayload = {
+      ...data,
+      genero: packGeneroWithTipoCliente(data.genero, data.tipo_cliente),
+      tipo_cliente: data.tipo_cliente || '-',
+    };
     const res = await remoteApiFetch<ContactoRecord>('/api/contactos', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(packedPayload),
     });
     if (!res.ok) throw new Error(res.error || 'Error al crear contacto en D1 remoto');
-    return res.data ?? null;
+    return res.data ? normalizeContactoRecord(res.data) : null;
   }
   await ensureDatabaseInitialized(db);
   const contactoName = data.contacto ? data.contacto.trim() : '';
@@ -1615,6 +1772,10 @@ export async function createContacto(
           ? cleanField(data.nacionalidad_pasaporte)
           : existing.nacionalidad_pasaporte,
       genero: cleanField(data.genero) !== '-' ? cleanField(data.genero) : existing.genero,
+      tipo_cliente:
+        cleanField(data.tipo_cliente) !== '-'
+          ? cleanField(data.tipo_cliente)
+          : existing.tipo_cliente || '-',
       fecha_emision_pasaporte:
         cleanField(data.fecha_emision_pasaporte) !== '-'
           ? cleanField(data.fecha_emision_pasaporte)
@@ -1628,6 +1789,7 @@ export async function createContacto(
     return updated ?? existing;
   }
 
+  const packedGen = packGeneroWithTipoCliente(data.genero, data.tipo_cliente);
   const values = [
     contactoName,
     cleanField(data.telefono),
@@ -1637,7 +1799,8 @@ export async function createContacto(
     cleanField(data.fecha_nacimiento),
     cleanField(data.numero_pasaporte),
     cleanField(data.nacionalidad_pasaporte),
-    cleanField(data.genero),
+    packedGen,
+    cleanField(data.tipo_cliente),
     cleanField(data.fecha_emision_pasaporte),
     cleanField(data.fecha_vencimiento_pasaporte),
   ];
@@ -1648,17 +1811,17 @@ export async function createContacto(
         `INSERT INTO contactos (
           contacto, telefono, email, nombres, apellidos,
           fecha_nacimiento, numero_pasaporte, nacionalidad_pasaporte,
-          genero, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
+          genero, tipo_cliente, fecha_emision_pasaporte, fecha_vencimiento_pasaporte,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         RETURNING *`
       )
       .bind(...values)
       .first<ContactoRecord>();
 
-    if (result) return result;
+    if (result) return normalizeContactoRecord(result);
   } catch {
-    // Fallback si RETURNING * o restricción UNIQUE falla
+    // Fallback si RETURNING * o columna aún no migrada
     await db
       .prepare(
         `INSERT OR IGNORE INTO contactos (
@@ -1668,7 +1831,19 @@ export async function createContacto(
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
       )
-      .bind(...values)
+      .bind(
+        contactoName,
+        cleanField(data.telefono),
+        cleanField(data.email),
+        cleanField(data.nombres),
+        cleanField(data.apellidos),
+        cleanField(data.fecha_nacimiento),
+        cleanField(data.numero_pasaporte),
+        cleanField(data.nacionalidad_pasaporte),
+        packedGen,
+        cleanField(data.fecha_emision_pasaporte),
+        cleanField(data.fecha_vencimiento_pasaporte)
+      )
       .run();
   }
 
@@ -1681,16 +1856,40 @@ export async function updateContacto(
   fields: Partial<NewContactoRecord>
 ): Promise<ContactoRecord | null> {
   if (isLocalDevEnvironment()) {
+    let resolvedGen = fields.genero;
+    let resolvedTipo = fields.tipo_cliente;
+    if (resolvedGen === undefined || resolvedTipo === undefined) {
+      const current = await getContactoById(db, id);
+      if (resolvedGen === undefined) resolvedGen = current?.genero || '-';
+      if (resolvedTipo === undefined) resolvedTipo = current?.tipo_cliente || '-';
+    }
+    const packedFields = {
+      ...fields,
+      genero: packGeneroWithTipoCliente(resolvedGen, resolvedTipo),
+      tipo_cliente: resolvedTipo || '-',
+    };
     const res = await remoteApiFetch<ContactoRecord>('/api/contactos', {
       method: 'PATCH',
-      body: JSON.stringify({ id, ...fields }),
+      body: JSON.stringify({ id, ...packedFields }),
     });
     if (!res.ok) throw new Error(res.error || 'Error al actualizar contacto en D1 remoto');
-    return res.data ?? null;
+    return res.data ? normalizeContactoRecord(res.data) : null;
   }
   await ensureDatabaseInitialized(db);
   const existing = await getContactoById(db, id);
   if (!existing) return null;
+
+  const isPhoneOnly = (s: string | null | undefined) =>
+    /^[\d\s\+\-\(\)\.]+$/.test((s || '').trim());
+
+  const baseGenero =
+    fields.genero !== undefined
+      ? (fields.genero.split('::')[0] || '-').trim() || '-'
+      : existing.genero;
+  const resolvedTipoCliente =
+    fields.tipo_cliente !== undefined
+      ? fields.tipo_cliente.trim() || '-'
+      : existing.tipo_cliente || '-';
 
   const updated = {
     contacto: fields.contacto !== undefined ? fields.contacto.trim() : existing.contacto,
@@ -1710,7 +1909,8 @@ export async function updateContacto(
       fields.nacionalidad_pasaporte !== undefined
         ? fields.nacionalidad_pasaporte.trim() || '-'
         : existing.nacionalidad_pasaporte,
-    genero: fields.genero !== undefined ? fields.genero.trim() || '-' : existing.genero,
+    genero: packGeneroWithTipoCliente(baseGenero, resolvedTipoCliente),
+    tipo_cliente: resolvedTipoCliente,
     fecha_emision_pasaporte:
       fields.fecha_emision_pasaporte !== undefined
         ? fields.fecha_emision_pasaporte.trim() || '-'
@@ -1721,41 +1921,178 @@ export async function updateContacto(
         : existing.fecha_vencimiento_pasaporte,
   };
 
-  const result = await db
-    .prepare(
-      `UPDATE contactos
-       SET contacto = ?,
-           telefono = ?,
-           email = ?,
-           nombres = ?,
-           apellidos = ?,
-           fecha_nacimiento = ?,
-           numero_pasaporte = ?,
-           nacionalidad_pasaporte = ?,
-           genero = ?,
-           fecha_emision_pasaporte = ?,
-           fecha_vencimiento_pasaporte = ?,
-           updated_at = datetime('now')
-       WHERE id = ?
-       RETURNING *`
-    )
-    .bind(
-      updated.contacto,
-      updated.telefono,
-      updated.email,
-      updated.nombres,
-      updated.apellidos,
-      updated.fecha_nacimiento,
-      updated.numero_pasaporte,
-      updated.nacionalidad_pasaporte,
-      updated.genero,
-      updated.fecha_emision_pasaporte,
-      updated.fecha_vencimiento_pasaporte,
-      id
-    )
-    .first<ContactoRecord>();
+  // Si el identificador principal era solo un número telefónico y el usuario completó Nombres/Apellidos,
+  // usar el nombre completo como identificador para Pendientes y Pagos y preservar el teléfono.
+  if (isPhoneOnly(updated.contacto)) {
+    const composedName = [
+      updated.nombres !== '-' ? updated.nombres : '',
+      updated.apellidos !== '-' ? updated.apellidos : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (composedName) {
+      if (updated.telefono === '-') {
+        updated.telefono = updated.contacto;
+      }
+      updated.contacto = composedName;
+    }
+  }
 
-  return result ?? null;
+  let result: ContactoRecord | null = null;
+  try {
+    result = await db
+      .prepare(
+        `UPDATE contactos
+         SET contacto = ?,
+             telefono = ?,
+             email = ?,
+             nombres = ?,
+             apellidos = ?,
+             fecha_nacimiento = ?,
+             numero_pasaporte = ?,
+             nacionalidad_pasaporte = ?,
+             genero = ?,
+             tipo_cliente = ?,
+             fecha_emision_pasaporte = ?,
+             fecha_vencimiento_pasaporte = ?,
+             updated_at = datetime('now')
+         WHERE id = ?
+         RETURNING *`
+      )
+      .bind(
+        updated.contacto,
+        updated.telefono,
+        updated.email,
+        updated.nombres,
+        updated.apellidos,
+        updated.fecha_nacimiento,
+        updated.numero_pasaporte,
+        updated.nacionalidad_pasaporte,
+        updated.genero,
+        updated.tipo_cliente,
+        updated.fecha_emision_pasaporte,
+        updated.fecha_vencimiento_pasaporte,
+        id
+      )
+      .first<ContactoRecord>();
+  } catch {
+    await db
+      .prepare(
+        `UPDATE contactos
+         SET telefono = ?,
+             email = ?,
+             nombres = ?,
+             apellidos = ?,
+             fecha_nacimiento = ?,
+             numero_pasaporte = ?,
+             nacionalidad_pasaporte = ?,
+             genero = ?,
+             fecha_emision_pasaporte = ?,
+             fecha_vencimiento_pasaporte = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .bind(
+        updated.telefono,
+        updated.email,
+        updated.nombres,
+        updated.apellidos,
+        updated.fecha_nacimiento,
+        updated.numero_pasaporte,
+        updated.nacionalidad_pasaporte,
+        updated.genero,
+        updated.fecha_emision_pasaporte,
+        updated.fecha_vencimiento_pasaporte,
+        id
+      )
+      .run();
+    result = await getContactoById(db, id);
+  }
+
+  // Sincronizar automáticamente todos los pendientes y pagos asociados a este contacto
+  // para que nunca se pierdan ni desaparezcan en el panel de Pendientes o Pagos al editar el contacto.
+  try {
+    const norm = (s: string | null | undefined) =>
+      (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const oldComposed = [
+      existing.nombres && existing.nombres !== '-' ? existing.nombres.trim() : '',
+      existing.apellidos && existing.apellidos !== '-' ? existing.apellidos.trim() : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const newComposed = [
+      updated.nombres !== '-' ? updated.nombres : '',
+      updated.apellidos !== '-' ? updated.apellidos : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    const nameCandidates = new Set<string>(
+      [
+        norm(existing.contacto),
+        norm(updated.contacto),
+        norm(oldComposed),
+        norm(newComposed),
+      ].filter(Boolean)
+    );
+
+    const phoneCandidates = new Set<string>(
+      [
+        normalizePhoneForWhatsApp(existing.contacto),
+        normalizePhoneForWhatsApp(existing.telefono),
+        normalizePhoneForWhatsApp(updated.telefono),
+      ].filter((d) => d.length >= 7)
+    );
+
+    const targetContactoName = result?.contacto || updated.contacto;
+
+    const allPendientes = await db.prepare('SELECT * FROM pendientes').all<PendienteRecord>();
+    const matchedPendienteIds = new Set<number>();
+
+    for (const p of allPendientes.results ?? []) {
+      const pNorm = norm(p.contacto);
+      const pPhone = normalizePhoneForWhatsApp(p.contacto);
+      const matchesByName = nameCandidates.has(pNorm);
+      const matchesByPhone = pPhone.length >= 7 && phoneCandidates.has(pPhone);
+
+      if (matchesByName || matchesByPhone) {
+        matchedPendienteIds.add(p.id);
+        const newApellidos =
+          updated.apellidos !== '-' && (!p.apellidos || p.apellidos === '-')
+            ? updated.apellidos
+            : p.apellidos || '-';
+        if (p.contacto !== targetContactoName || p.apellidos !== newApellidos) {
+          await db
+            .prepare(
+              "UPDATE pendientes SET contacto = ?, apellidos = ?, updated_at = datetime('now') WHERE id = ?"
+            )
+            .bind(targetContactoName, newApellidos, p.id)
+            .run();
+        }
+      }
+    }
+
+    const allPagos = await db.prepare('SELECT * FROM pagos').all<PagoRecord>();
+    for (const pg of allPagos.results ?? []) {
+      const pgNorm = norm(pg.contacto);
+      const pgPhone = normalizePhoneForWhatsApp(pg.contacto);
+      const matchesById = pg.pendiente_id ? matchedPendienteIds.has(pg.pendiente_id) : false;
+      const matchesByName = nameCandidates.has(pgNorm);
+      const matchesByPhone = pgPhone.length >= 7 && phoneCandidates.has(pgPhone);
+
+      if ((matchesById || matchesByName || matchesByPhone) && pg.contacto !== targetContactoName) {
+        await db
+          .prepare("UPDATE pagos SET contacto = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(targetContactoName, pg.id)
+          .run();
+      }
+    }
+  } catch {}
+
+  return result ? normalizeContactoRecord(result) : null;
 }
 
 export async function deleteContacto(db: D1Database, id: number): Promise<boolean> {
@@ -1767,5 +2104,187 @@ export async function deleteContacto(db: D1Database, id: number): Promise<boolea
   }
   await ensureDatabaseInitialized(db);
   const result = await db.prepare('DELETE FROM contactos WHERE id = ?').bind(id).run();
+  return Boolean(result.success);
+}
+
+// ==========================================
+// OPERACIONES CRUD: TABLA NOTAS (CHECK LIST)
+// ==========================================
+
+const localDevNotasFallback: NotaRecord[] = [];
+let localDevNotaNextId = 1;
+
+function normalizeNotaRow(row: {
+  id: number;
+  texto: string;
+  completada: number | boolean;
+  created_at?: string;
+  updated_at?: string;
+}): NotaRecord {
+  return {
+    id: Number(row.id),
+    texto: (row.texto || '').trim(),
+    completada: Boolean(row.completada === true || Number(row.completada) === 1),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export async function getAllNotas(db: D1Database): Promise<NotaRecord[]> {
+  if (isLocalDevEnvironment()) {
+    try {
+      const res = await remoteApiFetch<NotaRecord[]>('/api/notas');
+      if (res.ok && Array.isArray(res.data)) {
+        return res.data.map(normalizeNotaRow);
+      }
+    } catch {}
+    return [...localDevNotasFallback];
+  }
+  await ensureDatabaseInitialized(db);
+  const { results } = await db
+    .prepare('SELECT * FROM notas ORDER BY completada ASC, id DESC')
+    .all<{
+      id: number;
+      texto: string;
+      completada: number;
+      created_at?: string;
+      updated_at?: string;
+    }>();
+  return (results ?? []).map(normalizeNotaRow);
+}
+
+export async function createNota(db: D1Database, record: NewNotaRecord): Promise<NotaRecord> {
+  const cleanTexto = (record.texto || '').trim();
+  const isComp = record.completada ? 1 : 0;
+
+  if (isLocalDevEnvironment()) {
+    try {
+      const res = await remoteApiFetch<NotaRecord>('/api/notas', {
+        method: 'POST',
+        body: JSON.stringify({ texto: cleanTexto, completada: Boolean(record.completada) }),
+      });
+      if (res.ok && res.data) {
+        return normalizeNotaRow(res.data);
+      }
+    } catch {}
+    const nowStr = getNowFormatted();
+    const created: NotaRecord = {
+      id: localDevNotaNextId++,
+      texto: cleanTexto,
+      completada: Boolean(record.completada),
+      created_at: nowStr,
+      updated_at: nowStr,
+    };
+    localDevNotasFallback.unshift(created);
+    return created;
+  }
+
+  await ensureDatabaseInitialized(db);
+  const row = await db
+    .prepare(
+      `INSERT INTO notas (texto, completada, created_at, updated_at)
+       VALUES (?, ?, datetime('now'), datetime('now'))
+       RETURNING *`
+    )
+    .bind(cleanTexto, isComp)
+    .first<{
+      id: number;
+      texto: string;
+      completada: number;
+      created_at?: string;
+      updated_at?: string;
+    }>();
+
+  if (!row) {
+    throw new Error('No se pudo crear la nota en Cloudflare D1.');
+  }
+  return normalizeNotaRow(row);
+}
+
+export async function updateNota(
+  db: D1Database,
+  id: number,
+  updates: Partial<NewNotaRecord>
+): Promise<NotaRecord | null> {
+  if (isLocalDevEnvironment()) {
+    try {
+      const res = await remoteApiFetch<NotaRecord>('/api/notas', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, ...updates }),
+      });
+      if (res.ok && res.data) {
+        return normalizeNotaRow(res.data);
+      }
+    } catch {}
+    const idx = localDevNotasFallback.findIndex((n) => n.id === id);
+    if (idx === -1) return null;
+    const current = localDevNotasFallback[idx];
+    const updated: NotaRecord = {
+      ...current,
+      texto: updates.texto !== undefined ? updates.texto.trim() : current.texto,
+      completada: updates.completada !== undefined ? Boolean(updates.completada) : current.completada,
+      updated_at: getNowFormatted(),
+    };
+    localDevNotasFallback[idx] = updated;
+    return updated;
+  }
+
+  await ensureDatabaseInitialized(db);
+  const existing = await db
+    .prepare('SELECT * FROM notas WHERE id = ?')
+    .bind(id)
+    .first<{
+      id: number;
+      texto: string;
+      completada: number;
+      created_at?: string;
+      updated_at?: string;
+    }>();
+
+  if (!existing) return null;
+
+  const newTexto = updates.texto !== undefined ? updates.texto.trim() : existing.texto;
+  const newCompletada =
+    updates.completada !== undefined ? (updates.completada ? 1 : 0) : existing.completada;
+
+  const row = await db
+    .prepare(
+      `UPDATE notas
+       SET texto = ?,
+           completada = ?,
+           updated_at = datetime('now')
+       WHERE id = ?
+       RETURNING *`
+    )
+    .bind(newTexto, newCompletada, id)
+    .first<{
+      id: number;
+      texto: string;
+      completada: number;
+      created_at?: string;
+      updated_at?: string;
+    }>();
+
+  return row ? normalizeNotaRow(row) : null;
+}
+
+export async function deleteNota(db: D1Database, id: number): Promise<boolean> {
+  if (isLocalDevEnvironment()) {
+    try {
+      const res = await remoteApiFetch<unknown>(`/api/notas?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) return true;
+    } catch {}
+    const idx = localDevNotasFallback.findIndex((n) => n.id === id);
+    if (idx !== -1) {
+      localDevNotasFallback.splice(idx, 1);
+      return true;
+    }
+    return false;
+  }
+
+  await ensureDatabaseInitialized(db);
+  const result = await db.prepare('DELETE FROM notas WHERE id = ?').bind(id).run();
   return Boolean(result.success);
 }

@@ -15,7 +15,7 @@ const [pendientes, estatusList, contactosList] = await Promise.all([
 
 <Layout title="Global Travel CW | Panel de Pendientes">
   <Header activeTab="pendientes" />
-  <main class="min-h-screen bg-base-muted pb-12">
+  <main class="flex-1 min-h-0 flex flex-col overflow-hidden bg-base-muted">
     <Hero clientes={pendientes} estatusList={estatusList} contactosList={contactosList} />
   </main>
 </Layout>

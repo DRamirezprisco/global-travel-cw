@@ -14,7 +14,7 @@ const {
 ---
 
 <!doctype html>
-<html lang={SITE_META.lang}>
+<html lang={SITE_META.lang} class="h-dvh overflow-hidden">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,7 +22,7 @@ const {
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
   </head>
-  <body class="bg-base text-primary min-h-screen antialiased">
+  <body class="bg-base-muted text-primary h-dvh overflow-hidden flex flex-col antialiased">
     <slot />
   </body>
 </html>

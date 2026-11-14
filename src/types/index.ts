@@ -115,6 +115,7 @@ export interface ContactoRecord {
   numero_pasaporte: string;
   nacionalidad_pasaporte: string;
   genero: string;
+  tipo_cliente?: string;
   fecha_emision_pasaporte: string;
   fecha_vencimiento_pasaporte: string;
   created_at?: string;
@@ -143,6 +144,20 @@ export interface PagoRecord {
 }
 
 export type NewPagoRecord = Omit<PagoRecord, 'id' | 'updated_at'>;
+
+// --- REGISTRO NOTAS (Check list) ---
+export interface NotaRecord {
+  id: number;
+  texto: string;
+  completada: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type NewNotaRecord = {
+  texto: string;
+  completada?: boolean;
+};
 
 export interface SeedRecord {
   contacto: string;

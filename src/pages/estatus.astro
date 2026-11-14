@@ -11,7 +11,7 @@ const estatusList = await getAllEstatus(db);
 
 <Layout title="Global Travel CW | Catálogo de Estatus">
   <Header activeTab="estatus" />
-  <main class="min-h-screen bg-base-muted pb-12">
+  <main class="flex-1 min-h-0 flex flex-col overflow-hidden bg-base-muted">
     <EstatusPanel estatusList={estatusList} />
   </main>
 </Layout>

@@ -25,9 +25,9 @@ const PRESET_COLORS = [
 ];
 ---
 
-<section class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+<section class="flex-1 min-h-0 flex flex-col w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-3">
   <!-- Barra superior con Botón Nuevo Estatus -->
-  <div class="flex items-center justify-between">
+  <div class="shrink-0 flex items-center justify-between">
     <h1 class="text-xl sm:text-2xl font-black text-primary tracking-tight">
       Estatus
     </h1>
@@ -42,10 +42,10 @@ const PRESET_COLORS = [
   </div>
 
   <!-- Tabla de Estatus (Sencilla: Color, Nombre del Estatus, Código) -->
-  <div class="bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
+  <div class="flex-1 min-h-0 flex flex-col bg-base rounded-xl border border-base-border shadow-xs overflow-hidden">
     <div class="table-wrapper">
       <table class="w-full text-left text-sm border-collapse">
-        <thead class="bg-primary text-base text-xs uppercase tracking-wider">
+        <thead class="bg-primary text-base text-xs uppercase tracking-wider sticky top-0 z-20">
           <tr>
             <th scope="col" class="py-3.5 px-6 font-bold border-b-2 border-secondary w-44">
               Color
